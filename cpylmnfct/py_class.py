@@ -8,7 +8,7 @@ from .conntrack import *
 from .expect import *
 
 class Conntrack(object):
-    def __init__(ct=None):
+    def __init__(self, ct=None):
         if ct is None: ct = conntrack_new()
         self._ct = ct
 
