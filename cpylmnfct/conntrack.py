@@ -69,7 +69,7 @@ def conntrack_set_attr_u8(ct, attr_type, value):
 
 ## nfct_set_attr_u16 - set the value of a certain conntrack attribute
 # conntrack_set_attr_u16 = c_nfct_set_attr_u16
-def conntrack_set_attr_u16(ct, attr_type, value);
+def conntrack_set_attr_u16(ct, attr_type, value):
     if attr_type >= ATTR_MAX: raise OSError(errno.EINVAL, "not a valid ct attr type")
     return c_nfct_set_attr_u16(ct, attr_type, value)
 
@@ -283,7 +283,7 @@ def filter_dump_set_attr(f, attr_type, value):
 
 ## nfct_filter_dump_set_attr_u8 - set u8 dump filter attribute
 # filter_dump_set_attr_u8 = c_nfct_filter_dump_set_attr_u8
-def filter_dump_set_attr_u8(f, attr_type, value)
+def filter_dump_set_attr_u8(f, attr_type, value):
     if attr_type >= ATTR_FILTER_DUMP_MAX: raise OSError(errno.EINVAL, "not a valid filter dump attr type")
     c_nfct_filter_dump_set_attr_u8(f, attr_type, value)
 
