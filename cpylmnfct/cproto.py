@@ -6,7 +6,7 @@ from ctypes import *
 import errno
 from cpylmnl.linux import netlinkh as netlink
 
-LIBNFCT = CDLL("libnetfilter_conntrack.so")
+LIBNFCT = CDLL("libnetfilter_conntrack.so", use_errno=True)
 
 ### treat struct nf_conntrack, nfct_filter, nfct_filter_dump, nf_expect
 ### as opaque - c_void_p
