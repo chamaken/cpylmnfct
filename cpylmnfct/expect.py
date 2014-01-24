@@ -60,7 +60,7 @@ def expect_set_attr_u16(exp, attr_type, value):
 
 ## nfexp_set_attr_u32 - set the value of a certain expect attribute
 # expect_set_attr_u32 = c_nfexp_set_attr_u32
-def expect_set_attr_U32(exp, attr_type, value):
+def expect_set_attr_u32(exp, attr_type, value):
     if attr_type >= ATTR_EXP_MAX: raise OSError(errno.EINVAL, "not a valid expect attr type")
     c_nfexp_set_attr_u32(exp, attr_type, value)
 
@@ -120,11 +120,11 @@ def expect_snprintf(size, exp, msg_type, out_flag, flags):
     if ret == -1: raise os_error()
     return str(c_buf)
 
-# expect_nlmsg_build = nfexp_nlmsg_build
+# expect_nlmsg_build = c_nfexp_nlmsg_build
 def expect_nlmsg_build(nlh, exp):
     if c_nfexp_nlmsg_build(nlh, exp) == -1: raise os_error()
 
-# expect_nlmsg_parse = nfexp_nlmsg_parse
+# expect_nlmsg_parse = c_nfexp_nlmsg_parse
 def expect_nlmsg_parse(nlh, ct):
     ret = c_nfexp_nlmsg_parse(nlh, exp)
     if ret == -1: raise os_error()

@@ -169,7 +169,7 @@ def conntrack_get_attr_grp(ct, attr_type, data):
         sizeof(data)
     except TypeError:
         raise OSError(errno.EINVAL, "data must be ctypes type")
-    if nfct_get_attr_grp(ct, attr_type, byref(data)) < 0: raise os_error()
+    if c_nfct_get_attr_grp(ct, attr_type, byref(data)) < 0: raise os_error()
 def conntrack_get_attr_grp_as(ct, attr_type, cls):
     data = cls.__new__(cls)
     conntrack_get_attr_grp(ct, attr_type, data)
@@ -241,7 +241,7 @@ def filter_add_attr(f, attr_type, value):
 # filter_add_attr_u32 = c_nfct_filter_add_attr_u32
 def filter_add_attr_u32(f, attr_type, value):
     if attr_type >= NFCT_FILTER_MAX: raise OSError(errno.EINVAL, "not a valid filter attr type")
-    nfct_filter_add_attr_u32(ct, attr_type, value)
+    c_nfct_filter_add_attr_u32(ct, attr_type, value)
 
 ## nfct_filter_set_logic - set the filter logic for an attribute type
 # filter_set_logic = c_nfct_filter_set_logic
