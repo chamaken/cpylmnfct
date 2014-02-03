@@ -415,4 +415,5 @@ def c_raise_if_errno():
 
 def os_error():
     en = get_errno()
+    set_errno(0)
     return OSError(en, errno.errorcode[en])
