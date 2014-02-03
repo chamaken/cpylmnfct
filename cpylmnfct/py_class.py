@@ -53,6 +53,11 @@ class Conntrack(object):
     def nlmsg_parse(self, nlh):		conntrack_nlmsg_parse(nlh, self._ct)
     def payload_parse(self, p, l3):	conntrack_payload_parse(p, l3, self._ct)
 
+    def __enter__(self): return self
+    def __exit__(self, t, v, tb):
+        self.destroy()
+        return False
+
 
 class Filter(object):
     def __init__(self, filter=None):
@@ -73,6 +78,11 @@ class Filter(object):
     @staticmethod
     def detatch(fd):			filter_detach(fd)
 
+    def __enter__(self): return self
+    def __exit__(self, t, v, tb):
+        self.destroy()
+        return False
+
 
 class FilterDump(object):
     def __init__(self, filter_dump=None):
@@ -89,6 +99,11 @@ class FilterDump(object):
     def set_attr(self, a, v):		filter_dump_set_attr(self._filter.dump, a, v)
     def set_attr_u8(self, a, v):	filter_dump_set_attr_u8(self._filter.dump, a, v)
 
+    def __enter__(self): return self
+    def __exit__(self, t, v, tb):
+        self.destroy()
+        return False
+
 
 class Labelmap(object):
     def __init__(self, labelmap=None):
@@ -101,6 +116,11 @@ class Labelmap(object):
 
     def get_name(self, bit):		return labelmap_get_name(self._labelmap, bit)
     def get_bit(self, name):		return labelmap_get_bit(self._labelmap, name)
+
+    def __enter__(self): return self
+    def __exit__(self, t, v, tb):
+        self.destroy()
+        return False
 
 
 class Bitmask(object):
@@ -123,6 +143,11 @@ class Bitmask(object):
     def test_bit(self, bit):		return bitmask_test_bit(self._bitmask, bit)
     def unset_bit(self, bit):		bitmask_unset_bit(self._bitmask, bit)
     def maxbit(self):			return bitmask_maxbit(self._bitmask)
+
+    def __enter__(self): return self
+    def __exit__(self, t, v, tb):
+        self.destroy()
+        return False
 
 
 class Expect(object):
@@ -154,3 +179,8 @@ class Expect(object):
 
     def nlmsg_build(self, nlh):		return expect_nlmsg_build(nlh, self._exp)
     def nlmsg_parse(self, nlh):		return expect_nlmsg_parse(nlh, self._exp)
+
+    def __enter__(self): return self
+    def __exit__(self, t, v, tb):
+        self.destroy()
+        return False
