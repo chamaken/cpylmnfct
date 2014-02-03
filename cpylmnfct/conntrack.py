@@ -34,9 +34,8 @@ def conntrack_setobjopt(ct, option):
 ## nfct_getobjopt - get a certain option for a conntrack object
 # conntrack_getobjopt = c_nfct_getobjopt
 def conntrack_getobjopt(ct, option):
-    set_errno(0)
     ret = c_nfct_getobjopt(ct, option)
-    if ret == -1: c_raise_if_errno()
+    if ret == -1: raise os_error()
     return ret
 
 ## nfct_set_attr_l - set the value of a certain conntrack attribute
@@ -142,9 +141,8 @@ def conntrack_attr_is_set_array(ct, type_list):
     size = len(type_list)
     c_type_array = (c_int * size)
     for i, t in enumerate(type_list): c_type_array[i] = t
-    set_errno(0)
     ret = c_nfct_attr_is_set_array(ct, cast(c_type_array, c_void_p), size)
-    if ret < 0: c_raise_if_errno()
+    if ret < 0: raise os_error()
     return ret > 0
 
 ## nfct_attr_unset - unset a certain attribute
@@ -178,9 +176,8 @@ def conntrack_get_attr_grp_as(ct, attr_type, cls):
 ## nfct_attr_grp_is_set - check if an attribute group is set
 # conntrack_attr_grp_is_set = c_nfct_attr_grp_is_set
 def conntrack_attr_grp_is_set(ct, attr_type):
-    set_errno(0)
     ret = c_nfct_attr_grp_is_set(ct, attr_type)
-    if ret < 0: c_raise_if_errno()
+    if ret < 0: raise of_error()
     return ret > 0
 
 ## nfct_attr_grp_unset - unset an attribute group
