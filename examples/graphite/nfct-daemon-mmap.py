@@ -16,15 +16,19 @@ import cpylmnfct as nfct
 
 
 log = logging.getLogger(__name__)
+
 CARBON_SERVER = '192.168.1.1'
 CARBON_PORT = 2004
 CARBON_PREFIX = "myrouter"
+NSTATS_MAX = 2048
+QUEUE_SIZE = 16
 
 nstats = dict() # {Tuple: Counter}
-nstats_lock = threading.Lock()
+nstats_lock = threading.Lock()	# protect both nstats and tuple_lru
+tuple_lru = []
 nl_socket = None
 sending_nlmsghdr = None
-sending_queue = None
+sending_queue = multiprocessing.Queue(QUEUE_SIZE)
 
 
 class Tuple(object):
@@ -117,51 +121,62 @@ def make_tuple(ct):
     return Tuple(l3proto, server, client, l4proto, port)
 
 
+# check dumping is ...?
+#   type: IPCTNL_MSG_CT_GET && flag: NLM_F_MULTI => dump start
+#   type: NLMSG_DONE => dump stop
+
 @mnl.header_cb
 def data_cb(nlh, data):
-    ct = nfct.Conntrack()
-    try:
-        ct.nlmsg_parse(nlh)
-    except Exception as e:
-        log.error("nlmsg_parse: %s" % e)
+    with nfct.Conntrack() as ct:
+        try:
+            ct.nlmsg_parse(nlh)
+        except Exception as e:
+            log.error("nlmsg_parse: %s" % e)
+            return mnl.MNL_CB_OK
+
+        t = make_tuple(ct)
+        if t is None: return mnl.MNL_CB_OK
+
+        if not nstats.has_key(t):
+            counter = Counter(0, 0)
+            nstats[t] = counter
+        else:
+            counter = nstats[t]
+            tuple_lru.remove(t)
+        tuple_lru.insert(0, t)
+
+        if nlh.type & 0xff == nfnlct.IPCTNL_MSG_CT_DELETE:
+            counter.deleting = True
+
+        try:
+            orig_packets = ct.get_attr_u64(nfct.ATTR_ORIG_COUNTER_PACKETS)
+        except Exception as e:
+            log.error("could not get ORIG_COUNTER_PACKETS: %s" % e)
+            return mnl.MNL_CB_OK
+        try:
+            repl_packets = ct.get_attr_u64(nfct.ATTR_REPL_COUNTER_PACKETS)
+        except Exception as e:
+            log.error("could not get REPL_COUNTER_PACKETS: %s" % e)
+            return mnl.MNL_CB_OK
+
+        if orig_packets + repl_packets == 0:
+            return mnl.MNL_CB_OK
+
+        try:
+            orig_bytes = ct.get_attr_u64(nfct.ATTR_ORIG_COUNTER_BYTES)
+        except Exception as e:
+            log.error("could not get ORIG_COUNTER_BYTES: %s" % e)
+            return mnl.MNL_CB_OK
+        try:
+            repl_bytes = ct.get_attr_u64(nfct.ATTR_REPL_COUNTER_BYTES)
+        except Exception as e:
+            log.error("could not get REPL_COUNTER_BYTES: %s" % e)
+            return mnl.MNL_CB_OK
+
+        counter.pkts += orig_packets + repl_packets
+        counter.bytes += orig_bytes + repl_bytes
+
         return mnl.MNL_CB_OK
-
-    t = make_tuple(ct)
-    if t is None: return mnl.MNL_CB_OK
-
-    counter = nstats.setdefault(t, Counter(0, 0))
-    if nlh.type & 0xff == nfnlct.IPCTNL_MSG_CT_DELETE:
-        counter.deleting = True
-
-    try:
-        orig_packets = ct.get_attr_u64(nfct.ATTR_ORIG_COUNTER_PACKETS)
-    except Exception as e:
-        log.error("could not get ORIG_COUNTER_PACKETS: %s" % e)
-        return mnl.MNL_CB_OK
-    try:
-        repl_packets = ct.get_attr_u64(nfct.ATTR_REPL_COUNTER_PACKETS)
-    except Exception as e:
-        log.error("could not get REPL_COUNTER_PACKETS: %s" % e)
-        return mnl.MNL_CB_OK
-
-    if orig_packets + repl_packets == 0:
-        return mnl.MNL_CB_OK
-
-    try:
-        orig_bytes = ct.get_attr_u64(nfct.ATTR_ORIG_COUNTER_BYTES)
-    except Exception as e:
-        log.error("could not get ORIG_COUNTER_BYTES: %s" % e)
-        return mnl.MNL_CB_OK
-    try:
-        repl_bytes = ct.get_attr_u64(nfct.ATTR_REPL_COUNTER_BYTES)
-    except Exception as e:
-        log.error("could not get REPL_COUNTER_BYTES: %s" % e)
-        return mnl.MNL_CB_OK
-
-    counter.pkts += orig_packets + repl_packets
-    counter.bytes += orig_bytes + repl_bytes
-
-    return mnl.MNL_CB_OK
 
 
 def handle(buf):
@@ -182,8 +197,17 @@ def alarm_handler(signum, frame):
     # ... request a fresh dump of the table from kernel
     nl_socket.send_nlmsg(sending_nlmsghdr)
 
+    # check if in the middle of dumping?
+    s = socket.fromfd(nl_socket.get_fd(), socket.AF_NETLINK, socket.SOCK_RAW)
+    sock_err = s.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+    if sock_err == errno.EBUSY:
+        log.warn("in the act of dumping, do nothing and return")
+        return
+    elif sock_err != 0:
+        raise OSError(sock_err, errno.errorcode[sock_err])
+
     if not nstats_lock.acquire(False):
-        log.warn("nstats is being handled by another")
+        log.warn("nstats is being handled by another, do nothing and return")
         return
 
     now = int(time.time())
@@ -195,7 +219,9 @@ def alarm_handler(signum, frame):
         listOfMetricTuples.append((str(k), (now, v.bytes)))
         v.pkts = 0
         v.bytes = 0
-    for k in deleting_keys: del nstats[k]
+    for k in deleting_keys:
+        del nstats[k]
+        tuple_lru.remove(k)
 
     nstats_lock.release()
 
@@ -209,7 +235,7 @@ def send_process(sk):
     global sending_queue
     while True:
         l = sending_queue.get() # listOfMetricTuples
-        if len(l) is None: return
+        if l is None: return
         if len(l) == 0: continue
 
         payload = pickle.dumps(l)
@@ -235,9 +261,9 @@ def set_sending_nlh():
     nfh.version = nfnl.NFNETLINK_V0
     nfh.res_id = 0
 
-    # Filter by mark: We only want to dump entries whose mark is zefo
-    sending_nlmsghdr.put_u32(nfnlct.CTA_MARK, socket.htonl(0))
-    sending_nlmsghdr.put_u32(nfnlct.CTA_MARK_MASK, socket.htonl(0xffffffff))
+    # if you want to filter by mark - only want to dump entries whose mark is zefo
+    # sending_nlmsghdr.put_u32(nfnlct.CTA_MARK, socket.htonl(0))
+    # sending_nlmsghdr.put_u32(nfnlct.CTA_MARK_MASK, socket.htonl(0xffffffff))
 
 
 def mnl_socket_poll(nl):
@@ -247,21 +273,24 @@ def mnl_socket_poll(nl):
         p.register(fd, select.POLLIN | select.POLLERR)
         try:
             events = p.poll(-1)
-        except select.error as e: # by SIGALRM
-            if e[0] == errno.EINTR:
+        except select.error as e:
+            if e[0] == errno.EINTR: # by SIGALRM
                 continue
             raise
         for efd, event in events:
             if efd == fd:
                 if event == select.POLLIN:
-                    return 0
+                    return
                 if event == select.POLLERR:
-                    return -1
+                    s = socket.fromfd(fd, socket.AF_NETLINK, socket.SOCK_RAW)
+                    en = s.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+                    raise select.error(en, errno.errorcode[en])
 
 
 def main():
     global nl_socket
     global sending_queue
+    global tuple_lru
 
     if len(sys.argv) != 2:
         print("Usage: %s <poll-secs>" % sys.argv[0], file=sys.stderr)
@@ -283,60 +312,84 @@ def main():
         log.fatal("could not connect to carbon server %d@%s" % (CARBON_PORT, CARBON_SERVER))
         sys.exit(-1)
 
-    frame_size = 4096
-    # Open netlink socket to operate with netfilter
-    with mnl.Socket(netlink.NETLINK_NETFILTER) as nl_socket:
-        # use ring rx only
-        nl_socket.set_ringopt(mnl.MNL_RING_RX, mnl.MNL_SOCKET_BUFFER_SIZE * 4, 64, mnl.MNL_SOCKET_BUFFER_SIZE, 4 * 64)
-        nl_socket.map_ring()
-        rxring = nl_socket.get_ring(mnl.MNL_RING_RX)
+    # setup netlink socket - see examples/netfilter/nfct-daemon in libmnl
+    nl_socket = mnl.Socket(netlink.NETLINK_NETFILTER)
+    nl_socket.set_ringopt(mnl.MNL_RING_RX, mnl.MNL_SOCKET_BUFFER_SIZE * 4, 64, mnl.MNL_SOCKET_BUFFER_SIZE, 4 * 64)
+    nl_socket.map_ring()
+    rxring = nl_socket.get_ring(mnl.MNL_RING_RX)
+    nl_socket.bind(nfnlcm.NF_NETLINK_CONNTRACK_DESTROY, mnl.MNL_SOCKET_AUTOPID)
 
-        # Subscribe to destroy events to avoid leaking counters. The same
-        # socket is used to periodically atomically dump and reset counters.
-        nl_socket.bind(nfnlcm.NF_NETLINK_CONNTRACK_DESTROY, mnl.MNL_SOCKET_AUTOPID)
+    # tweak buf
+    buffersize = 1 << 22
+    sock = socket.fromfd(nl_socket.get_fd(), socket.AF_NETLINK, socket.SOCK_RAW)
+    sock.setsockopt(socket.SOL_SOCKET, 33, buffersize) # SO_RCVBUFFORCE
 
-        # tweak nl socket buffer
-        buffersize = 1 << 22
-        sock = socket.fromfd(nl_socket.get_fd(), socket.AF_NETLINK, socket.SOCK_RAW)
-        sock.setsockopt(socket.SOL_SOCKET, 33, buffersize) # SO_RCVBUFFORCE
+    # set DELETE event reliable
+    on = struct.pack("i", 1)
+    nl_socket.setsockopt(netlink.NETLINK_BROADCAST_ERROR, on)
+    nl_socket.setsockopt(netlink.NETLINK_NO_ENOBUFS, on)
 
-        # The two tweaks below enable reliable event delivery, packets may
-        # be dropped if the netlink receiver buffer overruns. This happens ...
-        # a) if the kernel spams this user-space process until the receiver
-        #    is filled.
-        # or:
-        # b) if the user-space process does not pull messages from the
-        #    receiver buffer so often.
-        on = struct.pack("i", 1)[0]
-        nl_socket.setsockopt(netlink.NETLINK_BROADCAST_ERROR, on)
-        nl_socket.setsockopt(netlink.NETLINK_NO_ENOBUFS, on)
+    # create nlmsghdr send by sighandler
+    set_sending_nlh()
 
-        set_sending_nlh()
+    # start sending process
+    p = multiprocessing.Process(target=send_process, args=(carbon_socket,))
+    p.start()
 
-        sending_queue = multiprocessing.Queue(16)
-        p = multiprocessing.Process(target=send_process, args=(carbon_socket,))
-        p.start()
+    # Every N seconds ...
+    signal.signal(signal.SIGALRM, alarm_handler)
+    signal.setitimer(signal.ITIMER_REAL, 0.1, secs)
 
-        # Every N seconds ...
-        signal.signal(signal.SIGALRM, alarm_handler)
-        signal.setitimer(signal.ITIMER_REAL, 0.1, secs)
-
-        recvbuf = bytearray(mnl.MNL_SOCKET_BUFFER_SIZE)
-        while True:
-            frame = rxring.get_frame()
-            if frame.status == netlink.NL_MMAP_STATUS_VALID:
-                buf = mnl.MNL_FRAME_PAYLOAD(frame)
-            elif frame.status == netlink.NL_MMAP_STATUS_COPY:
+    recvbuf = bytearray(mnl.MNL_SOCKET_BUFFER_SIZE)
+    while True:
+        frame = rxring.get_frame()
+        if frame.status == netlink.NL_MMAP_STATUS_VALID:
+            buf = mnl.MNL_FRAME_PAYLOAD(frame)
+        elif frame.status == netlink.NL_MMAP_STATUS_COPY:
+            try:
                 rsize = nl_socket.recv_into(recvbuf)
-                buf = recvbuf[:rsize]
-            else:
-                # XXX: ignore error return value -1
+            except OSError as e:
+                if e.errno == errno.ENOBUFS:
+                    # we've set NETLINK_NO_ENOBUFS, it should not happen
+                    log.error("could not receive COPY status message" +
+                              "(it's probably DESTROY event)\n," +
+                              "force shrinking stats size to: %d" % NSTATS_MAX)
+                    if len(nstats) > NSTATS_MAX:
+                        try:
+                            nstats_lock.acquire(True)
+                            for k in tuple_lru[NSTATS_MAX:]:
+                                del nstats[k]
+                            tuple_lru = tuple_lru[:NSTATS_MAX]
+                        finally:
+                            nstats_lock.release()
+                        continue
+                elif e.errno == errno.EBUSY:
+                    log.info("duplicate DUMP request may causes EBUSY on recvmsg, clear and ignore")
+                    s = socket.fromfd(nl_socket.get_fd(), socket.AF_NETLINK, socket.SOCK_RAW)
+                    sock_err = s.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+                else:
+                    sending_queue.put(None)
+                    raise
+            buf = recvbuf[:rsize]
+        else:
+            try:
                 mnl_socket_poll(nl_socket)
-                continue
-            ret = handle(buf)
-            frame.status = netlink.NL_MMAP_STATUS_UNUSED
-            rxring.advance()
-            if ret < 0: return -1
+            except select.error as e:
+                if e[0] == errno.ENOBUFS:
+                    # we've set NETLINK_NO_ENOBUFS, it should not happen
+                    log.error("We are losing events. Please consider " +
+                              "increasing the set_ringopt params");
+                else:
+                    sending_queue.put(None)
+                    raise
+            continue
+
+        ret = handle(buf)
+        frame.status = netlink.NL_MMAP_STATUS_UNUSED
+        rxring.advance()
+        if ret < 0:
+            sending_queue.put(None)
+            sys.exit(-1)
 
 
 if __name__ == '__main__':
