@@ -20,18 +20,20 @@ log = logging.getLogger(__name__)
 CARBON_SERVER = '192.168.1.1'
 CARBON_PORT = 2004
 CARBON_PREFIX = "myrouter"
-NSTATS_MAX = 2048
 QUEUE_SIZE = 16
 
 nstats = dict() # {Tuple: Counter}
-nstats_lock = threading.Lock()	# protect both nstats and tuple_lru
-tuple_lru = []
+nstats_lock = threading.Lock()
 nl_socket = None
 sending_nlmsghdr = None
 sending_queue = multiprocessing.Queue(QUEUE_SIZE)
+dumping = False
 
 
 class Tuple(object):
+    """simple orig/repl flow representation
+    """
+
     def __init__(self, l3, server, client, l4, port=0):
         self.l3proto = l3
         self.server = server	# big endian byte[4 or 16]
@@ -84,6 +86,9 @@ class Counter(object):
 
 
 def make_tuple(ct):
+    """create tuple from nf_conntrack
+    """
+
     try:
         l3proto = ct.get_attr_u8(nfct.ATTR_L3PROTO)
     except Exception as e:
@@ -93,7 +98,6 @@ def make_tuple(ct):
     try:
         l4proto = ct.get_attr_u8(nfct.ATTR_L4PROTO)
     except Exception as e:
-        # cannot get DST on IGMP?
         log.warn("ignore because could not get L4PROTO: %s, L3PROTO: %d" % (e, l3proto))
         return None
 
@@ -101,19 +105,16 @@ def make_tuple(ct):
         server = bytearray(struct.pack("i", ct.get_attr_u32(nfct.ATTR_IPV4_DST)))
         client = bytearray(struct.pack("i", ct.get_attr_u32(nfct.ATTR_IPV4_SRC)))
     elif l3proto == socket.AF_INET6:
-        # I don't know why bytearray needed (*1)
+        # I don't know why bytearray cast is needed
         server = bytearray(ct.get_attr_as(nfct.ATTR_IPV6_DST, (ctypes.c_ubyte * 16)))
         client = bytearray(ct.get_attr_as(nfct.ATTR_IPV6_SRC, (ctypes.c_ubyte * 16)))
-        # (*1) get addresses properly here
     else:
         log.warn("unknow L3 proto: %d" % l3proto)
         return None
 
     if l4proto == socket.IPPROTO_ICMP:
         port = ct.get_attr_u8(nfct.ATTR_ICMP_TYPE)
-    elif l4proto in (socket.IPPROTO_TCP, socket.IPPROTO_UDP,
-                     # socket.IPPROTO_DCCP, socket.IPPROTO_SCTP, socket.IPPROTO_UDPLITE
-                     ):
+    elif l4proto in (socket.IPPROTO_TCP, socket.IPPROTO_UDP):
         port = ct.get_attr_u16(nfct.ATTR_PORT_DST)
     else:
         port = 0
@@ -121,12 +122,17 @@ def make_tuple(ct):
     return Tuple(l3proto, server, client, l4proto, port)
 
 
-# check dumping is ...?
-#   type: IPCTNL_MSG_CT_GET && flag: NLM_F_MULTI => dump start
-#   type: NLMSG_DONE => dump stop
-
 @mnl.header_cb
 def data_cb(nlh, data):
+    """mnl callback which update tuple's counter
+    """
+
+    global nstats
+    global dumping
+
+    if nlh.flags & netlink.NLM_F_MULTI == netlink.NLM_F_MULTI:
+        dumping = True
+
     with nfct.Conntrack() as ct:
         try:
             ct.nlmsg_parse(nlh)
@@ -137,13 +143,7 @@ def data_cb(nlh, data):
         t = make_tuple(ct)
         if t is None: return mnl.MNL_CB_OK
 
-        if not nstats.has_key(t):
-            counter = Counter(0, 0)
-            nstats[t] = counter
-        else:
-            counter = nstats[t]
-            tuple_lru.remove(t)
-        tuple_lru.insert(0, t)
+        counter = nstats.setdefault(t, Counter(0, 0))
 
         if nlh.type & 0xff == nfnlct.IPCTNL_MSG_CT_DELETE:
             counter.deleting = True
@@ -180,33 +180,46 @@ def data_cb(nlh, data):
 
 
 def handle(buf):
+    """mnl.cb_run wrapper
+    """
+
+    global nstats_lock
+    global dumping
+
     nstats_lock.acquire(True)
     try:
         ret = mnl.cb_run(buf, 0, 0, data_cb, None)
     finally:
         nstats_lock.release()
 
-    return 0
+    if ret == mnl.MNL_CB_STOP:
+        dumping = False
+    return ret
 
 
 def alarm_handler(signum, frame):
+    """sigalarm handler
+    unfortunately python select does not return remainded time.
+
+    create list of metrics for carbon from nstats and pass it to
+    sending process
+    """
+
+    global nstats
+    global nstats_lock
     global nl_socket
     global sending_queue
     global sending_nlmsghdr
+    global dumping
 
-    # ... request a fresh dump of the table from kernel
-    nl_socket.send_nlmsg(sending_nlmsghdr)
-
-    # check if in the middle of dumping?
-    s = socket.fromfd(nl_socket.get_fd(), socket.AF_NETLINK, socket.SOCK_RAW)
-    sock_err = s.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
-    if sock_err == errno.EBUSY:
-        log.warn("in the act of dumping, do nothing and return")
-        return
-    elif sock_err != 0:
-        raise OSError(sock_err, errno.errorcode[sock_err])
+    if not dumping:
+        # ... request a fresh dump of the table from kernel
+        nl_socket.send_nlmsg(sending_nlmsghdr)
+    else:
+        log.warn("another dump is running, not send dump request")
 
     if not nstats_lock.acquire(False):
+        # cause skipping dump
         log.warn("nstats is being handled by another, do nothing and return")
         return
 
@@ -221,7 +234,6 @@ def alarm_handler(signum, frame):
         v.bytes = 0
     for k in deleting_keys:
         del nstats[k]
-        tuple_lru.remove(k)
 
     nstats_lock.release()
 
@@ -232,7 +244,11 @@ def alarm_handler(signum, frame):
 
 
 def send_process(sk):
+    """sending list of metrics to carbon
+    """
+
     global sending_queue
+
     while True:
         l = sending_queue.get() # listOfMetricTuples
         if l is None: return
@@ -241,12 +257,14 @@ def send_process(sk):
         payload = pickle.dumps(l)
         header = struct.pack("!L", len(payload))
         message = header + payload
-        # should catch EINTR?
         sk.sendall(message)
         log.info("sent entries #: %d, size: %d" % (len(l), len(message)))
 
 
 def set_sending_nlh():
+    """create dump nl request
+    """
+
     global sending_nlmsghdr
 
     buf = bytearray(mnl.MNL_SOCKET_BUFFER_SIZE)
@@ -267,6 +285,8 @@ def set_sending_nlh():
 
 
 def mnl_socket_poll(nl):
+    """polling for mmaped nl socket
+    """
     fd = nl.get_fd()
     p = select.poll()
     while True:
@@ -282,15 +302,15 @@ def mnl_socket_poll(nl):
                 if event == select.POLLIN:
                     return
                 if event == select.POLLERR:
-                    s = socket.fromfd(fd, socket.AF_NETLINK, socket.SOCK_RAW)
-                    en = s.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
-                    raise select.error(en, errno.errorcode[en])
+                    s = socket.fromfd(mnl_socket.get_fd(), socket.AF_NETLINK, socket.SOCK_RAW)
+                    sock_err = s.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+                    if sock_err != 0:
+                        raise OSError(sock_err, errno.errorcode[sock_err])
 
 
 def main():
     global nl_socket
     global sending_queue
-    global tuple_lru
 
     if len(sys.argv) != 2:
         print("Usage: %s <poll-secs>" % sys.argv[0], file=sys.stderr)
@@ -304,7 +324,7 @@ def main():
     # more chances to run
     os.nice(-20)
 
-    # Open socket for sending to carbon
+    # open socket for sending to carbon
     carbon_socket = socket.socket()
     try:
         carbon_socket.connect((CARBON_SERVER, CARBON_PORT))
@@ -314,7 +334,7 @@ def main():
 
     # setup netlink socket - see examples/netfilter/nfct-daemon in libmnl
     nl_socket = mnl.Socket(netlink.NETLINK_NETFILTER)
-    nl_socket.set_ringopt(mnl.MNL_RING_RX, mnl.MNL_SOCKET_BUFFER_SIZE * 4, 64, mnl.MNL_SOCKET_BUFFER_SIZE, 4 * 64)
+    nl_socket.set_ringopt(mnl.MNL_RING_RX, mnl.MNL_SOCKET_BUFFER_SIZE, 64, mnl.MNL_SOCKET_BUFFER_SIZE / 4, 4 * 64)
     nl_socket.map_ring()
     rxring = nl_socket.get_ring(mnl.MNL_RING_RX)
     nl_socket.bind(nfnlcm.NF_NETLINK_CONNTRACK_DESTROY, mnl.MNL_SOCKET_AUTOPID)
@@ -327,6 +347,7 @@ def main():
     # set DELETE event reliable
     on = struct.pack("i", 1)
     nl_socket.setsockopt(netlink.NETLINK_BROADCAST_ERROR, on)
+    # no need ENOBUFS
     nl_socket.setsockopt(netlink.NETLINK_NO_ENOBUFS, on)
 
     # create nlmsghdr send by sighandler
@@ -349,39 +370,16 @@ def main():
             try:
                 rsize = nl_socket.recv_into(recvbuf)
             except OSError as e:
-                if e.errno == errno.ENOBUFS:
-                    # we've set NETLINK_NO_ENOBUFS, it should not happen
-                    log.error("could not receive COPY status message" +
-                              "(it's probably DESTROY event)\n," +
-                              "force shrinking stats size to: %d" % NSTATS_MAX)
-                    if len(nstats) > NSTATS_MAX:
-                        try:
-                            nstats_lock.acquire(True)
-                            for k in tuple_lru[NSTATS_MAX:]:
-                                del nstats[k]
-                            tuple_lru = tuple_lru[:NSTATS_MAX]
-                        finally:
-                            nstats_lock.release()
-                        continue
-                elif e.errno == errno.EBUSY:
-                    log.info("duplicate DUMP request may causes EBUSY on recvmsg, clear and ignore")
-                    s = socket.fromfd(nl_socket.get_fd(), socket.AF_NETLINK, socket.SOCK_RAW)
-                    sock_err = s.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
-                else:
-                    sending_queue.put(None)
-                    raise
+                # finish sending process
+                sending_queue.put(None)
+                raise
             buf = recvbuf[:rsize]
         else:
             try:
                 mnl_socket_poll(nl_socket)
-            except select.error as e:
-                if e[0] == errno.ENOBUFS:
-                    # we've set NETLINK_NO_ENOBUFS, it should not happen
-                    log.error("We are losing events. Please consider " +
-                              "increasing the set_ringopt params");
-                else:
-                    sending_queue.put(None)
-                    raise
+            except (select.error, OSError) as e:
+                sending_queue.put(None)
+                raise
             continue
 
         ret = handle(buf)
