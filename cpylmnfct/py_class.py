@@ -8,8 +8,17 @@ from .conntrack import *
 from .expect import *
 
 class Conntrack(object):
-    def __init__(self):			self._ct = conntrack_new()
-    def destroy(self): # XXX: no lock	conntrack_destroy(self._ct)
+    def __init__(self, ct=None):
+        if ct is None: ct = conntrack_new()
+        self._ct = ct
+
+    def destroy(self): # XXX: no lock
+        conntrack_destroy(self._ct)
+        del self._ct
+
+    def __del__(self): # XXX: no lock
+        if hasattr(self, "_ct"): self.destroy()
+
     def clone(self):			return Conntrack(conntrack_clone(self._ct))
     def setobjopt(self, o):		conntrack_setobjopt(self._ct, o)
     def getobjopt(self, o):		return conntrack_getobjopt(self._ct, o)
@@ -51,8 +60,17 @@ class Conntrack(object):
 
 
 class Filter(object):
-    def __init__(self):			self._filter = filter_create()
-    def destroy(self):			filter_destroy(self._filter)
+    def __init__(self, filter=None):
+        if filter is None: filter = filter_create()
+        self._filter = filter
+
+    def destroy(self):
+        filter_destroy(self._filter)
+        del self._filter
+
+    def __del__(self):
+        if hasattr(self, "_filter"): self.destroy()
+
     def add_attr(self, a, v):		filter_add_attr(self._filter, a, v)
     def add_attr_u32(self, a, v):	filter_add_attr_u32(self._filter, a, v)
     def set_logic(self, a, l):		filter_set_logic(self._filter, a, l)
@@ -67,8 +85,17 @@ class Filter(object):
 
 
 class FilterDump(object):
-    def __init__(self):			self._filter_dump = filter_dump_create()
-    def destroy(self):			filter_dump_destroy(self._filter_dump)
+    def __init__(self, filter_dump=None):
+        if filter_dump is None: filter_dump = filter_dump_create()
+        self._filter_dump = filter_dump
+
+    def destroy(self):
+        filter_dump_destroy(self._filter_dump)
+        del self._filter_dump
+
+    def __del__(self):
+        if hasattr(self, "_filter_dump"): self.destroy()
+
     def set_attr(self, a, v):		filter_dump_set_attr(self._filter.dump, a, v)
     def set_attr_u8(self, a, v):	filter_dump_set_attr_u8(self._filter.dump, a, v)
 
@@ -79,8 +106,14 @@ class FilterDump(object):
 
 
 class Labelmap(object):
-    def __init__(self):			self._labelmap = labelmap_new()
-    def destroy(self):			labelmap_destroy(self._labelmap)
+    def __init__(self, labelmap=None):
+        if labelmap is None: labelmap = labelmap_new()
+        self._labelmap = labelmap
+
+    def destroy(self):
+        labelmap_destroy(self._labelmap)
+        del self._labelmap
+
     def get_name(self, bit):		return labelmap_get_name(self._labelmap, bit)
     def get_bit(self, name):		return labelmap_get_bit(self._labelmap, name)
 
@@ -91,9 +124,21 @@ class Labelmap(object):
 
 
 class Bitmask(object):
-    def __init__(self, high):		self_bitmask = bitmask_new(high)
-    def destroy(self):			bitmask_destroy(self._bitmask)
-    def clone(self):			return Bitmask(0, bitmask_clone(self._bitmask))
+    def __init__(self, high, bitmask=None):
+        if bitmask is None:
+            bitmask = bitmask_new(high)
+        self._bitmask = bitmask
+
+    def destroy(self):
+        bitmask_destroy(self._bitmask)
+        del self._bitmask
+
+    def __del__(self):
+        if hasattr(self, "_bitmask"): self.destroy()
+
+    def clone(self):
+        return Bitmask(0, bitmask_clone(self._bitmask))
+
     def set_bit(self, bit):		bitmask_set_bit(self._bitmask, bit)
     def test_bit(self, bit):		return bitmask_test_bit(self._bitmask, bit)
     def unset_bit(self, bit):		bitmask_unset_bit(self._bitmask, bit)
@@ -106,8 +151,17 @@ class Bitmask(object):
 
 
 class Expect(object):
-    def __init__(self):			self._exp = expect_new()
-    def destroy(self):			expect_destroy(self._exp)
+    def __init__(self, exp=None):
+        if exp is None: exp = expect_new()
+        self._exp = exp
+
+    def destroy(self):
+        expect_destroy(self._exp)
+        del self._exp
+
+    def __del__(self):
+        if hasattr(self, "_exp"): self.destroy()
+
     def clone(self):			return Expect(expect_clone(self._exp))
     def cmp(self, e2, f):		return expect_cmp(self._exp, e2._exp, f)
     def set_attr(self, a, v):		expect_set_attr(self._exp, a, v)
