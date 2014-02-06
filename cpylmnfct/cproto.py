@@ -127,6 +127,7 @@ c_nfct_set_attr_u64 = LIBNFCT.nfct_set_attr_u64
 c_nfct_set_attr_u64.argtypes = [c_void_p, c_int, c_uint64]
 c_nfct_set_attr_u64.restype = None
 
+
 # void nfct_set_attr_l(struct nf_conntrack *ct, const enum nf_conntrack_attr type, const void *value, size_t len)
 c_nfct_set_attr_l = LIBNFCT.nfct_set_attr_l
 c_nfct_set_attr_l.argtypes = [c_void_p, c_int, c_void_p, c_size_t]
@@ -142,23 +143,39 @@ c_nfct_get_attr.restype = c_void_p
 # extern u_int8_t nfct_get_attr_u8(const struct nf_conntrack *ct, const enum nf_conntrack_attr type)
 c_nfct_get_attr_u8 = LIBNFCT.nfct_get_attr_u8
 c_nfct_get_attr_u8.argtypes = [c_void_p, c_int]
-c_nfct_get_attr.restype = c_uint8
+c_nfct_get_attr_u8.restype = c_uint8
 
 # u_int16_t nfct_get_attr_u16(const struct nf_conntrack *ct, const enum nf_conntrack_attr type)
 c_nfct_get_attr_u16 = LIBNFCT.nfct_get_attr_u16
 c_nfct_get_attr_u16.argtypes = [c_void_p, c_int]
-c_nfct_get_attr.restype = c_uint16
+c_nfct_get_attr_u16.restype = c_uint16
 
 # u_int32_t nfct_get_attr_u32(const struct nf_conntrack *ct, const enum nf_conntrack_attr type)
 c_nfct_get_attr_u32 = LIBNFCT.nfct_get_attr_u32
 c_nfct_get_attr_u32.argtypes = [c_void_p, c_int]
-c_nfct_get_attr.restype = c_uint32
+c_nfct_get_attr_u32.restype = c_uint32
 
 # u_int64_t nfct_get_attr_u64(const struct nf_conntrack *ct, const enum nf_conntrack_attr type)
 c_nfct_get_attr_u64 = LIBNFCT.nfct_get_attr_u64
 c_nfct_get_attr_u64.argtypes = [c_void_p, c_int]
-c_nfct_get_attr.restype = c_uint64
+c_nfct_get_attr_u64.restype = c_uint64
 
+## checker
+# int nfct_attr_is_set(const struct nf_conntrack *ct, const enum nf_conntrack_attr type);
+c_nfct_attr_is_set = LIBNFCT.nfct_attr_is_set
+c_nfct_attr_is_set.argtypes = [c_void_p, c_int]
+c_nfct_attr_is_set.restype = c_int
+
+# int nfct_attr_is_set_array(const struct nf_conntrack *ct, const enum nf_conntrack_attr *type_array, int size);
+c_nfct_attr_is_set_array = LIBNFCT.nfct_attr_is_set_array
+c_nfct_attr_is_set_array.argtypes = [c_void_p, c_void_p, c_int]
+c_nfct_attr_is_set_array.restype = c_int
+
+## unsetter
+# int nfct_attr_unset(struct nf_conntrack *ct, const enum nf_conntrack_attr type);
+c_nfct_attr_unset = LIBNFCT.nfct_attr_unset
+c_nfct_attr_unset.argtypes = [c_void_p, c_int]
+c_nfct_attr_unset.restype = c_int
 
 ## group setter
 # void nfct_set_attr_grp(struct nf_conntrack *ct, const enum nf_conntrack_attr_grp type, const void *value)
@@ -172,6 +189,18 @@ c_nfct_set_attr_grp.restype = None
 c_nfct_get_attr_grp = LIBNFCT.nfct_get_attr_grp
 c_nfct_get_attr_grp.argtypes = [c_void_p, c_int, c_void_p]
 c_nfct_get_attr_grp.restype = c_int
+
+## group checker
+# int nfct_attr_grp_is_set(const struct nf_conntrack *ct, const enum nf_conntrack_attr_grp type);
+c_nfct_attr_grp_is_set = LIBNFCT.nfct_attr_grp_is_set
+c_nfct_attr_grp_is_set.argtypes = [c_void_p, c_int]
+c_nfct_attr_grp_is_set.restype = c_int
+
+## unsetter
+# int nfct_attr_grp_unset(struct nf_conntrack *ct, const enum nf_conntrack_attr_grp type);
+c_nfct_attr_grp_unset = LIBNFCT.nfct_attr_grp_unset
+c_nfct_attr_grp_unset.argtypes = [c_void_p, c_int]
+c_nfct_attr_grp_unset.restype = c_int
 
 
 ## print
@@ -189,11 +218,7 @@ c_nfct_snprintf_labels.argtypes = [c_char_p, c_uint, c_void_p, c_uint, c_uint, c
 c_nfct_snprintf_labels.restype = c_int
 
 ## comparison
-# int nfct_compare(const struct nf_conntrack *ct1, const struct nf_conntrack *ct2)
-c_nfct_compare = LIBNFCT.nfct_compare
-c_nfct_compare.argtypes = [c_void_p, c_void_p]
-c_nfct_compare.restype = c_int
-
+# NO int nfct_compare(const struct nf_conntrack *ct1, const struct nf_conntrack *ct2)
 # int nfct_cmp(const struct nf_conntrack *ct1, const struct nf_conntrack *ct2, unsigned int flags)
 c_nfct_cmp = LIBNFCT.nfct_cmp
 c_nfct_cmp.argtypes = [c_void_p, c_void_p, c_uint]
@@ -400,7 +425,7 @@ c_nfexp_nlmsg_parse.argtypes = [POINTER(netlink.Nlmsghdr), c_void_p]
 c_nfexp_nlmsg_parse.restype = c_int
 
 ## cpylmnl.linux.netfilter.nf_conntrack_commonh
-# enum ip_conntrack_status 
+# enum ip_conntrack_status
 # NF_CT_EXPECT_...
 
 ## cpylmnl.cpylmnl.linux.netfilter.nf_conntrack_tcph

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-from __future__ import absolute_import
+from __future__ import absolute_import, print_function
 
 from ctypes import *
-import errno
+import sys, errno
 from cpylmnl.linux import netlinkh as netlink
 
 from .cproto import *
@@ -58,7 +58,7 @@ def conntrack_set_attr(ct, attr_type, value):
     except TypeError:
         raise OSError(errno.EINVAL, "value must be ctypes type")
     if attr_type >= ATTR_MAX: raise OSError(errno.EINVAL, "not a valid ct attr type")
-    c_nfct_set_attr(ct, attr_type, value)
+    c_nfct_set_attr(ct, attr_type, byref(value))
 
 ## nfct_set_attr_u8 - set the value of a certain conntrack attribute
 # conntrack_set_attr_u8 = c_nfct_set_attr_u8
@@ -139,8 +139,7 @@ def conntrack_attr_is_set(ct, attr_type):
 # conntrack_attr_is_set_array = c_nfct_attr_is_set_array
 def conntrack_attr_is_set_array(ct, type_list):
     size = len(type_list)
-    c_type_array = (c_int * size)
-    for i, t in enumerate(type_list): c_type_array[i] = t
+    c_type_array = (c_int * size)(*type_list)
     ret = c_nfct_attr_is_set_array(ct, cast(c_type_array, c_void_p), size)
     if ret < 0: raise os_error()
     return ret > 0
@@ -201,9 +200,6 @@ def conntrack_snprintf_labels(size, ct, msg_type, out_type, flags, labelmap):
     if ret == -1: raise os_error()
     return str(c_buf)
 
-## nfct_compare - compare two conntrack objects
-conntrack_compare = c_nfct_compare
-
 ## nfct_cmp - compare two conntrack objects
 conntrack_cmp = c_nfct_cmp
 
@@ -249,7 +245,7 @@ def filter_set_logic(f, attr_type, logic):
 # filter_attach = c_nfct_filter_attach
 def filter_attach(fd, f):
     if c_nfct_filter_attach(fd, f) == -1: raise os_error()
-    
+
 ## nfct_filter_detach - detach an existing filter
 # filter_detach = c_nfct_filter_detach
 def filter_detach(fd):

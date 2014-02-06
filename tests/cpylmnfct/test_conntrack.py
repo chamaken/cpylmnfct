@@ -3,20 +3,22 @@
 from __future__ import print_function
 
 import sys, unittest
-import struct, socket, ipaddr
+import struct, socket, ipaddr, ctypes, errno
 
+import cpylmnl as mnl
 import cpylmnl.linux.netlinkh as netlink
 import cpylmnl.linux.netfilter.nfnetlinkh as nfnl
-import cpylmnl as mnl
+import cpylmnl.linux.netfilter.nf_conntrack_commonh as nfctcm
+import cpylmnl.linux.netfilter.nfnetlink_conntrackh as nfnlct
 
 import cpylmnfct as nfct
 
 class TestSuite(unittest.TestCase):
     def setUp(self):
-        self.nlmsgbuf1 = bytearray([
+        self.nlmsgbuf10 = bytearray([ # len: 196 + 16
 					# ----------------	------------------
                 0xc4, 0x00, 0x00, 0x00,	# |  0000000196  |	| message length |
-                0x02, 0x01, 0x00, 0x00,	# | 00258 | ---- |	|  type | flags  |
+                0x02, 0x01, 0x00, 0x00,	# | 00258 | ---- |	|  type | flags  |	IPCTNL_MSG_CT_DELETE
                 0x00, 0x00, 0x00, 0x00,	# |  0000000000  |	| sequence number|
                 0x00, 0x00, 0x00, 0x00,	# |  0000000000  |	|     port ID    |
 					# ----------------	------------------
@@ -26,21 +28,79 @@ class TestSuite(unittest.TestCase):
                 0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|	    CTA_IP_V4_SRC
                 0x01, 0x02, 0x03, 0x04,	# | 01 02 03 04  |	|      data      |
                 0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|	    CTA_IP_V4_DST
-                0xff, 0xfe, 0xfd, 0xfc,	# | ff fe fd fc  |	|      data      |	  - CTA_TUPLE_IP
+                0xff, 0xfe, 0xfd, 0xfc,	# | ff fe fd fc  |	|      data      |
                 0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|	  + CTA_TUPLE_PROTO
                 0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|	    CTA_PROTO_NUM
                 0x11, 0x00, 0x00, 0x00,	# | 11 00 00 00  |	|      data      |
                 0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|	    CTA_PROTO_SRC_PORT
                 0xf8, 0x8f, 0x00, 0x00,	# | f8 8f 00 00  |	|      data      |
                 0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|	    CTA_PROTO_DST_PORT
-                0x00, 0x35, 0x00, 0x00,	# | 00 35 00 00  |	|      data      |	  - CTA_TUPLE_PROTO
-					#						- CTA_TUPLE_ORIG
+                0x00, 0x35, 0x00, 0x00,	# | 00 35 00 00  |	|      data      |
                 0x34, 0x00, 0x02, 0x80,	# |00052|N-|00002|	|len |flags| type|	+ CTA_TUPLE_REPLY
                 0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|	  + CTA_TUPLE_IP
                 0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|	    CTA_IP_V4_SRC
                 0xff, 0xfe, 0xfd, 0xfc,	# | ff fe fd fc  |	|      data      |
                 0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|	    CTA_IP_V4_DST
-                0x01, 0x02, 0x03, 0x04,	# | 01 02 03 04  |	|      data      |	  - CTA_TUPLE_IP
+                0x01, 0x02, 0x03, 0x04,	# | 01 02 03 04  |	|      data      |
+                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|	  + CTA_TUPLE_PROTO
+                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|	    CTA_PROTO_NUM
+                0x11, 0x00, 0x00, 0x00,	# | 11 00 00 00  |	|      data      |
+                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|	    CTA_PROTO_SRC_PORT
+                0x00, 0x35, 0x00, 0x00,	# | 00 35 00 00  |	|      data      |
+                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|	    CTA_PROTO_DST_PORT
+                0xf8, 0x8f, 0x00, 0x00,	# | f8 8f 00 00  |	|      data      |
+                0x08, 0x00, 0x0c, 0x00,	# |00008|--|00012|	|len |flags| type|	CTA_ID *
+                0x17, 0x6d, 0x0d, 0x78,	# | 17 6d 0d 78  |	|      data      |
+                0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|	CTA_STATUS
+                0x00, 0x00, 0x00, 0x08,	# | 00 00 00 08  |	|      data      |	  IPS_CONFIRMED
+                0x1c, 0x00, 0x09, 0x80,	# |00028|N-|00009|	|len |flags| type|	+ CTA_COUNTERS_ORIG *
+                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|	  CTA_COUNTERS_PACKETS
+                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
+                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
+                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|	  CTA_CONTERS_BYTES
+                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
+                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
+                0x1c, 0x00, 0x0a, 0x80,	# |00028|N-|00010|	|len |flags| type|	+ CTA_COUNTERS_REPLY *
+                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|	  CTA_COUNTERS_PACKETS
+                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
+                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
+                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|	  CTA_CONTERS_BYTES
+                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
+                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
+                                        # ----------------	------------------
+                0xff, 0xff, 0xff, 0xff,
+                0xff, 0xff, 0xff, 0xff,
+                0xff, 0xff, 0xff, 0xff,
+                0xff, 0xff, 0xff, 0xff,
+                ])
+
+        self.nlmsgbuf11 = bytearray([ # len: 132 + 16
+					# ----------------	------------------
+                0x84, 0x00, 0x00, 0x00,	# |  0000000132  |	| message length |
+                0x02, 0x01, 0x00, 0x00,	# | 00258 | ---- |	|  type | flags  |	IPCTNL_MSG_CT_DELETE
+                0x00, 0x00, 0x00, 0x00,	# |  0000000000  |	| sequence number|
+                0x00, 0x00, 0x00, 0x00,	# |  0000000000  |	|     port ID    |
+					# ----------------	------------------
+                0x02, 0x00, 0x00, 0x00,	# | 02 00 00 00  |	|  extra header  |
+                0x34, 0x00, 0x01, 0x80,	# |00052|N-|00001|	|len |flags| type|	+ CTA_TUPLE_ORIG
+                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|	  + CTA_TUPLE_IP
+                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|	    CTA_IP_V4_SRC
+                0x01, 0x02, 0x03, 0x04,	# | 01 02 03 04  |	|      data      |
+                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|	    CTA_IP_V4_DST
+                0xff, 0xfe, 0xfd, 0xfc,	# | ff fe fd fc  |	|      data      |
+                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|	  + CTA_TUPLE_PROTO
+                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|	    CTA_PROTO_NUM
+                0x11, 0x00, 0x00, 0x00,	# | 11 00 00 00  |	|      data      |
+                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|	    CTA_PROTO_SRC_PORT
+                0xf8, 0x8f, 0x00, 0x00,	# | f8 8f 00 00  |	|      data      |
+                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|	    CTA_PROTO_DST_PORT
+                0x00, 0x35, 0x00, 0x00,	# | 00 35 00 00  |	|      data      |
+                0x34, 0x00, 0x02, 0x80,	# |00052|N-|00002|	|len |flags| type|	+ CTA_TUPLE_REPLY
+                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|	  + CTA_TUPLE_IP
+                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|	    CTA_IP_V4_SRC
+                0xff, 0xfe, 0xfd, 0xfc,	# | ff fe fd fc  |	|      data      |
+                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|	    CTA_IP_V4_DST
+                0x01, 0x02, 0x03, 0x04,	# | 01 02 03 04  |	|      data      |
                 0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|	  + CTA_TUPLE_PROTO
                 0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|	    CTA_PROTO_NUM
                 0x11, 0x00, 0x00, 0x00,	# | 11 00 00 00  |	|      data      |
@@ -48,28 +108,12 @@ class TestSuite(unittest.TestCase):
                 0x00, 0x35, 0x00, 0x00,	# | 00 35 00 00  |	|      data      |
                 0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|	    CTA_PROTO_DST_PORT
                 0xf8, 0x8f, 0x00, 0x00,	# | f8 8f 00 00  |	|      data      |	  - CTA_TUPLE_PROTO
-					#						- CTA_TUPLE_REPLY
-                0x08, 0x00, 0x0c, 0x00,	# |00008|--|00012|	|len |flags| type|	CTA_ID
-                0x17, 0x6d, 0x0d, 0x78,	# | 17 6d 0d 78  |	|      data      |
                 0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|	CTA_STATUS
                 0x00, 0x00, 0x00, 0x08,	# | 00 00 00 08  |	|      data      |	  IPS_CONFIRMED
-                0x1c, 0x00, 0x09, 0x80,	# |00028|N-|00009|	|len |flags| type|	+ CTA_COUNTERS_ORIG
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|	  CTA_COUNTERS_PACKETS
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|	  CTA_CONTERS_BYTES
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |	- CTA_CONTERS_ORIG
-                0x1c, 0x00, 0x0a, 0x80,	# |00028|N-|00010|	|len |flags| type|	+ CTA_COUNTERS_REPLY
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|	  CTA_COUNTERS_PACKETS
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|	  CTA_CONTERS_BYTES
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                ])                      # ----------------	------------------
+                                        # ----------------	------------------
+                ])
 
-        self.nlmsgbuf2 = bytearray([
+        self.nlmsgbuf20 = bytearray([ # len: 708 + 16
 					# ----------------	------------------
                 0xdc, 0x00, 0x00, 0x00,	# |  0000000220  |	| message length |
                 0x00, 0x01, 0x02, 0x00,	# | 00256 | -M-- |	|  type | flags  |
@@ -78,54 +122,54 @@ class TestSuite(unittest.TestCase):
 					# ----------------	------------------
                 0x02, 0x00, 0x00, 0x00,	# | 02 00 00 00  |	|  extra header  |
                 0x34, 0x00, 0x01, 0x80,	# |00052|N-|00001|	|len |flags| type|	+ CTA_TUPLE_ORIG
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|	  + 
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x92,	# | 0a 60 fe 92  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x85, 0x9a, 0xb2, 0xf7,	# | 85 9a b2 f7  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
+                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|	  + CTA_TUPLE_IP
+                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|	    CTA_IP_V4_SRC
+                0x01, 0x01, 0x01, 0x01,	# | 01 01 01 01  |	|      data      |
+                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|	    CTA_IP_V4_DST
+                0x02, 0x02, 0x02, 0x02,	# | 02 02 02 02  |	|      data      |
+                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|	  + CTA_TUPLE_PROTO
+                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|	    CTA_PTOTO_NUM
                 0x11, 0x00, 0x00, 0x00,	# | 11 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
+                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|	    CTA_PROTO_SRC_PORT
                 0x04, 0x64, 0x00, 0x00,	# | 04 64 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
+                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|	    CTA_PROTO_DST_PORT
                 0x00, 0xa1, 0x00, 0x00,	# | 00 a1 00 00  |	|      data      |
-                0x34, 0x00, 0x02, 0x80,	# |00052|N-|00002|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x85, 0x9a, 0xb2, 0xf7,	# | 85 9a b2 f7  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x92,	# | 0a 60 fe 92  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
+                0x34, 0x00, 0x02, 0x80,	# |00052|N-|00002|	|len |flags| type|	+ CTA_TUPLE_REPLY
+                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|	  + CTA_TUPLE_IP
+                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|	    CTA_TUPLE_V4_SRC
+                0x01, 0x01, 0x01, 0x01,	# | 01 01 01 01  |	|      data      |
+                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|	    CTA_TUP+E_V4_DST
+                0x02, 0x02, 0x02, 0x02,	# | 02 02 02 02  |	|      data      |
+                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|	  + CTA_TUPLE_PROTO
+                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|	    CTA_PROTO_NUM
                 0x11, 0x00, 0x00, 0x00,	# | 11 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
+                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|	    CTA_TUPLE_SRC_PORT
                 0x00, 0xa1, 0x00, 0x00,	# | 00 a1 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
+                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|	    CTA_TUPLE_DST_PORT
                 0x04, 0x64, 0x00, 0x00,	# | 04 64 00 00  |	|      data      |
-                0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x0e,	# | 00 00 00 0e  |	|      data      |
-                0x08, 0x00, 0x07, 0x00,	# |00008|--|00007|	|len |flags| type|
+                0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|	CTA_TUPLE_STATUS
+                0x00, 0x00, 0x00, 0x0e,	# | 00 00 00 0e  |	|      data      |	  IPS_EXPECTED|SEEN_REPLY|ASSURED|CONFIRMED
+                0x08, 0x00, 0x07, 0x00,	# |00008|--|00007|	|len |flags| type|	CTA_TIMEOUT
                 0x00, 0x00, 0x00, 0x99,	# | 00 00 00 99  |	|      data      |
-                0x1c, 0x00, 0x09, 0x80,	# |00028|N-|00009|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
+                0x1c, 0x00, 0x09, 0x80,	# |00028|N-|00009|	|len |flags| type|	+ CTA_COUNTERS_ORIG *
+                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|	  CTA_COUNTERS_PACKETS
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
+                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|	  CTA_COUNTERS_BYTES
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x1c, 0x00, 0x0a, 0x80,	# |00028|N-|00010|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
+                0x1c, 0x00, 0x0a, 0x80,	# |00028|N-|00010|	|len |flags| type|	+ CTA_COUNTERS_REPLY *
+                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|	  CTA_COUNTERS_PACKETS
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
+                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|	  CTA_COUNTERS_BYTES
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x08, 0x00,	# |00008|--|00008|	|len |flags| type|
+                0x08, 0x00, 0x08, 0x00,	# |00008|--|00008|	|len |flags| type|	CTA_MARK
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x0c, 0x00,	# |00008|--|00012|	|len |flags| type|
+                0x08, 0x00, 0x0c, 0x00,	# |00008|--|00012|	|len |flags| type|	CTA_ID *
                 0x15, 0x50, 0xb8, 0xb8,	# | 15 50 b8 b8  |	|      data      |
-                0x08, 0x00, 0x0b, 0x00,	# |00008|--|00011|	|len |flags| type|
+                0x08, 0x00, 0x0b, 0x00,	# |00008|--|00011|	|len |flags| type|	CTA_USE
                 0x00, 0x00, 0x00, 0x01,	# | 00 00 00 01  |	|      data      |
                 			# ----------------	------------------
 					#
@@ -136,67 +180,67 @@ class TestSuite(unittest.TestCase):
                 0xca, 0x24, 0x00, 0x00,	# |  0000009418  |	|     port ID    |
                 			# ----------------	------------------
                 0x02, 0x00, 0x00, 0x00,	# | 02 00 00 00  |	|  extra header  |
-                0x34, 0x00, 0x01, 0x80,	# |00052|N-|00001|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x86,	# | 0a 60 fe 86  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x00, 0x33, 0x85,	# | 0a 00 33 85  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
+                0x34, 0x00, 0x01, 0x80,	# |00052|N-|00001|	|len |flags| type|	+ CTA_TUPLE_ORIG
+                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|	  + CTA_TUPLE_IP
+                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|	    CTA_IP_V4_SRC
+                0x03, 0x05, 0x05, 0x05,	# | 03 03 03 03  |	|      data      |
+                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|	    CTA_IP_V4_DST
+                0x06, 0x06, 0x06, 0x06,	# | 04 04 04 04  |	|      data      |
+                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|	  + CTA_TUPLE_PROTO
+                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|	    CTA_PROTO_NUM
                 0x06, 0x00, 0x00, 0x00,	# | 06 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
+                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|	    CTA_PROTO_SRC_PORT
                 0xc1, 0x79, 0x00, 0x00,	# | c1 79 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
+                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|	    CTA_PROTO_DST_PORT
                 0x01, 0xbd, 0x00, 0x00,	# | 01 bd 00 00  |	|      data      |
-                0x34, 0x00, 0x02, 0x80,	# |00052|N-|00002|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x00, 0x33, 0x85,	# | 0a 00 33 85  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x86,	# | 0a 60 fe 86  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
+                0x34, 0x00, 0x02, 0x80,	# |00052|N-|00002|	|len |flags| type|	  + CTA_TUPLE_REPLY
+                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|	    + CTA_TUPLE_IP
+                0x06, 0x06, 0x06, 0x06,	# |00008|--|00001|	|len |flags| type|	      CTA_IP_V4_SRC
+                0x04, 0x04, 0x04, 0x04,	# | 04 04 04 04  |	|      data      |
+                0x05, 0x05, 0x05, 0x05,	# |00008|--|00002|	|len |flags| type|	      CTA_IP_V4_DST
+                0x03, 0x03, 0x03, 0x03,	# | 03 03 03 03  |	|      data      |
+                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|	    + CTA_TUPLE_PROTO
+                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|	      CTA_PROTO_NUM
                 0x06, 0x00, 0x00, 0x00,	# | 06 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
+                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|	      CTA_PROTO_SRC_PORT
                 0x01, 0xbd, 0x00, 0x00,	# | 01 bd 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
+                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|	      CTA_PROTO_DST_PORT
                 0xc1, 0x79, 0x00, 0x00,	# | c1 79 00 00  |	|      data      |
-                0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x0e,	# | 00 00 00 0e  |	|      data      |
-                0x08, 0x00, 0x07, 0x00,	# |00008|--|00007|	|len |flags| type|
+                0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|	CTA_TUPLE_STATUS
+                0x00, 0x00, 0x00, 0x0e,	# | 00 00 00 0e  |	|      data      |	  IPS_EXPECTED|SEEN_REPLY|ASSURED|CONFIRMED
+                0x08, 0x00, 0x07, 0x00,	# |00008|--|00007|	|len |flags| type|	CTA_TIMEOUT
                 0x00, 0x06, 0x97, 0x65,	# | 00 06 97 65  |	|      data      |
-                0x1c, 0x00, 0x09, 0x80,	# |00028|N-|00009|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
+                0x1c, 0x00, 0x09, 0x80,	# |00028|N-|00009|	|len |flags| type|	+ CTA_COUNTERS_ORIG *
+                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|	  CTA_COUNTERS_PACKETS
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
+                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|	  CTA_COUNTERS_BYTES
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x1c, 0x00, 0x0a, 0x80,	# |00028|N-|00010|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
+                0x1c, 0x00, 0x0a, 0x80,	# |00028|N-|00010|	|len |flags| type|	+ CTA_COUNTERS_REPLY *
+                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|	  CTA_COUNTERS_PACKETS
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
+                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|	  CTA_COUNTERS_BYTES
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x30, 0x00, 0x04, 0x80,	# |00048|N-|00004|	|len |flags| type|
-                0x2c, 0x00, 0x01, 0x80,	# |00044|N-|00001|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
+                0x30, 0x00, 0x04, 0x80,	# |00048|N-|00004|	|len |flags| type|	+ CTA_PROTOINFO
+                0x2c, 0x00, 0x01, 0x80,	# |00044|N-|00001|	|len |flags| type|	  + CTA_PROTOINFO_TCP
+                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|	    CTA_PROTOINFO_TCP_STATE
                 0x03, 0x00, 0x00, 0x00,	# | 03 00 00 00  |	|      data      |
-                0x05, 0x00, 0x02, 0x00,	# |00005|--|00002|	|len |flags| type|
+                0x05, 0x00, 0x02, 0x00,	# |00005|--|00002|	|len |flags| type|	    CTA_PROTOINFO_TCP_WSCALE_ORIGINAL
                 0x02, 0x00, 0x00, 0x00,	# | 02 00 00 00  |	|      data      |
-                0x05, 0x00, 0x03, 0x00,	# |00005|--|00003|	|len |flags| type|
+                0x05, 0x00, 0x03, 0x00,	# |00005|--|00003|	|len |flags| type|	    CTA_PROTOINFO_TCP_WSCALE_REPLY
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x06, 0x00, 0x04, 0x00,	# |00006|--|00004|	|len |flags| type|
+                0x06, 0x00, 0x04, 0x00,	# |00006|--|00004|	|len |flags| type|	    CTA_PROTOINFO_TCP_FLAGS_ORIGINAL
                 0x23, 0x00, 0x00, 0x00,	# | 23 00 00 00  |	|      data      |
-                0x06, 0x00, 0x05, 0x00,	# |00006|--|00005|	|len |flags| type|
+                0x06, 0x00, 0x05, 0x00,	# |00006|--|00005|	|len |flags| type|	    CTA_PROTOINFO_TCP_FLAGS_REPLY
                 0x23, 0x00, 0x00, 0x00,	# | 23 00 00 00  |	|      data      |
-                0x08, 0x00, 0x08, 0x00,	# |00008|--|00008|	|len |flags| type|
+                0x08, 0x00, 0x08, 0x00,	# |00008|--|00008|	|len |flags| type|	CTA_MARK
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x0c, 0x00,	# |00008|--|00012|	|len |flags| type|
+                0x08, 0x00, 0x0c, 0x00,	# |00008|--|00012|	|len |flags| type|	CTA_ID *
                 0x14, 0xcc, 0x56, 0x58,	# | 14 cc 56 58  |	|      data      |
-                0x08, 0x00, 0x0b, 0x00,	# |00008|--|00011|	|len |flags| type|
+                0x08, 0x00, 0x0b, 0x00,	# |00008|--|00011|	|len |flags| type|	CTA_USE
                 0x00, 0x00, 0x00, 0x01,	# | 00 00 00 01  |	|      data      |
                 			# ----------------	------------------
 					#
@@ -207,825 +251,208 @@ class TestSuite(unittest.TestCase):
                 0xca, 0x24, 0x00, 0x00,	# |  0000009418  |	|     port ID    |
                                         # ----------------	------------------
                 0x02, 0x00, 0x00, 0x00,	# | 02 00 00 00  |	|  extra header  |
-                0x34, 0x00, 0x01, 0x80,	# |00052|N-|00001|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x05, 0x35, 0x1d,	# | 0a 05 35 1d  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0xc1,	# | 0a 60 fe c1  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
+                0x34, 0x00, 0x01, 0x80,	# |00052|N-|00001|	|len |flags| type|	+ CTA_TUPLE_ORIG
+                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|	  + CTA_TUPLE_IP
+                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|	    CTA_IP_V4_SRC
+                0x55, 0x55, 0x55, 0x55,	# | 55 55 55 55  |	|      data      |
+                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|	    CTA_IP_V4_DST
+                0x66, 0x66, 0x66, 0x66,	# | 66 66 66 66  |	|      data      |
+                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|	  + CTA_TUPLE_PROTO
+                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|	    CTA_PROTO_NUM
                 0x11, 0x00, 0x00, 0x00,	# | 11 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
+                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|	    CTA_PROTO_SRC_PORT
                 0xca, 0xda, 0x00, 0x00,	# | ca da 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
+                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|	    CTA_PROTO_DST_PORT
                 0x02, 0x02, 0x00, 0x00,	# | 02 02 00 00  |	|      data      |
-                0x34, 0x00, 0x02, 0x80,	# |00052|N-|00002|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0xc1,	# | 0a 60 fe c1  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x05, 0x35, 0x1d,	# | 0a 05 35 1d  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
+                0x34, 0x00, 0x02, 0x80,	# |00052|N-|00002|	|len |flags| type|	  + CTA_TUPLE_REPLY
+                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|	    + CTA_TUPLE_IP
+                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|	      CTA_IP_V4_SRC
+                0x66, 0x66, 0x66, 0x66,	# | 66 66 66 66  |	|      data      |
+                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|	      CTA_IP_V4_DST
+                0x55, 0x55, 0x55, 0x55,	# | 55 55 55 55  |	|      data      |
+                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|	    + CTA_TUPLE_PROTO
+                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|	      CTA_PROTO_NUM
                 0x11, 0x00, 0x00, 0x00,	# | 11 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
+                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|	      CTA_PROTO_SRC_PORT
                 0x02, 0x02, 0x00, 0x00,	# | 02 02 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
+                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|	      CTA_PROTO_DST_PORT
                 0xca, 0xda, 0x00, 0x00,	# | ca da 00 00  |	|      data      |
-                0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x08,	# | 00 00 00 08  |	|      data      |
-                0x08, 0x00, 0x07, 0x00,	# |00008|--|00007|	|len |flags| type|
+                0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|	CTA_TUPLE_STATUS
+                0x00, 0x00, 0x00, 0x08,	# | 00 00 00 08  |	|      data      |	  IPS_CONFIRMED
+                0x08, 0x00, 0x07, 0x00,	# |00008|--|00007|	|len |flags| type|	CTA_TIMEOUT
                 0x00, 0x00, 0x00, 0x13,	# | 00 00 00 13  |	|      data      |
-                0x1c, 0x00, 0x09, 0x80,	# |00028|N-|00009|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
+                0x1c, 0x00, 0x09, 0x80,	# |00028|N-|00009|	|len |flags| type|	+ CTA_COUNTERS_ORIG *
+                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|	  CTA_COUNTERS_PACKETS
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
+                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|	  CTA_COUNTERS_BYTES
+                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
+                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
+                0x1c, 0x00, 0x0a, 0x80,	# |00028|N-|00010|	|len |flags| type|	+ CTA_COUNTERS_REPLY *
+                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|	  CTA_COUNTERS_PACKETS
+                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
+                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |	  CTA_COUNTERS_BYTES
                 0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x1c, 0x00, 0x0a, 0x80,	# |00028|N-|00010|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
+                0x08, 0x00, 0x08, 0x00,	# |00008|--|00008|	|len |flags| type|	CTA_MARK
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x08, 0x00,	# |00008|--|00008|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x0c, 0x00,	# |00008|--|00012|	|len |flags| type|
+                0x08, 0x00, 0x0c, 0x00,	# |00008|--|00012|	|len |flags| type|	CTA_ID *
                 0x12, 0xd5, 0x69, 0xe8,	# | 12 d5 69 e8  |	|      data      |
-                0x08, 0x00, 0x0b, 0x00,	# |00008|--|00011|	|len |flags| type|
+                0x08, 0x00, 0x0b, 0x00,	# |00008|--|00011|	|len |flags| type|	CTA_USE
                 0x00, 0x00, 0x00, 0x01,	# | 00 00 00 01  |	|      data      |
                 			# ----------------	------------------
-                			# 
-                			# ----------------	------------------
-                0xdc, 0x00, 0x00, 0x00,	# |  0000000220  |	| message length |
-                0x00, 0x01, 0x02, 0x00,	# | 00256 | -M-- |	|  type | flags  |
-                0x00, 0x00, 0x00, 0x00,	# |  0000000000  |	| sequence number|
-                0xca, 0x24, 0x00, 0x00,	# |  0000009418  |	|     port ID    |
-                			# ----------------	------------------
-		0x02, 0x00, 0x00, 0x00,	# | 02 00 00 00  |	|  extra header  |
-                0x34, 0x00, 0x01, 0x80,	# |00052|N-|00001|	|len |flags| type|                
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x92,	# | 0a 60 fe 92  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x85, 0x9a, 0xa6, 0xf2,	# | 85 9a a6 f2  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x11, 0x00, 0x00, 0x00,	# | 11 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
-                0x04, 0x64, 0x00, 0x00,	# | 04 64 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
-                0x00, 0xa1, 0x00, 0x00,	# | 00 a1 00 00  |	|      data      |
-                0x34, 0x00, 0x02, 0x80,	# |00052|N-|00002|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x85, 0x9a, 0xa6, 0xf2,	# | 85 9a a6 f2  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x92,	# | 0a 60 fe 92  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x11, 0x00, 0x00, 0x00,	# | 11 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
-                0x00, 0xa1, 0x00, 0x00,	# | 00 a1 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
-                0x04, 0x64, 0x00, 0x00,	# | 04 64 00 00  |	|      data      |
-                0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x0a,	# | 00 00 00 0a  |	|      data      |
-                0x08, 0x00, 0x07, 0x00,	# |00008|--|00007|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x09,	# | 00 00 00 09  |	|      data      |
-                0x1c, 0x00, 0x09, 0x80,	# |00028|N-|00009|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x1c, 0x00, 0x0a, 0x80,	# |00028|N-|00010|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x08, 0x00,	# |00008|--|00008|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x0c, 0x00,	# |00008|--|00012|	|len |flags| type|
-                0x17, 0x30, 0x10, 0x68,	# | 17 30 10 68  |	|      data      |
-                0x08, 0x00, 0x0b, 0x00,	# |00008|--|00011|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x01,	# | 00 00 00 01  |	|      data      |
-                			# ----------------	------------------
-		                	# 
-                			# ----------------	------------------
-                0xdc, 0x00, 0x00, 0x00,	# |  0000000220  |	| message length |
-                0x00, 0x01, 0x02, 0x00,	# | 00256 | -M-- |	|  type | flags  |
-                0x00, 0x00, 0x00, 0x00,	# |  0000000000  |	| sequence number|
-                0xca, 0x24, 0x00, 0x00,	# |  0000009418  |	|     port ID    |
-                			# ----------------	------------------
-		0x02, 0x00, 0x00, 0x00,	# | 02 00 00 00  |	|  extra header  |
-                0x34, 0x00, 0x01, 0x80,	# |00052|N-|00001|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|                
-                0x0a, 0x60, 0xfe, 0x92,	# | 0a 60 fe 92  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x60, 0xc8, 0x9e,	# | 0a 60 c8 9e  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x11, 0x00, 0x00, 0x00,	# | 11 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
-                0x04, 0x64, 0x00, 0x00,	# | 04 64 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
-                0x00, 0xa1, 0x00, 0x00,	# | 00 a1 00 00  |	|      data      |
-                0x34, 0x00, 0x02, 0x80,	# |00052|N-|00002|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x60, 0xc8, 0x9e,	# | 0a 60 c8 9e  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x92,	# | 0a 60 fe 92  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x11, 0x00, 0x00, 0x00,	# | 11 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
-                0x00, 0xa1, 0x00, 0x00,	# | 00 a1 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
-                0x04, 0x64, 0x00, 0x00,	# | 04 64 00 00  |	|      data      |
-                0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x0e,	# | 00 00 00 0e  |	|      data      |
-                0x08, 0x00, 0x07, 0x00,	# |00008|--|00007|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x06,	# | 00 00 00 06  |	|      data      |
-                0x1c, 0x00, 0x09, 0x80,	# |00028|N-|00009|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x1c, 0x00, 0x0a, 0x80,	# |00028|N-|00010|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x08, 0x00,	# |00008|--|00008|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x0c, 0x00,	# |00008|--|00012|	|len |flags| type|
-                0x17, 0x20, 0xb0, 0x68,	# | 17 20 b0 68  |	|      data      |
-                0x08, 0x00, 0x0b, 0x00,	# |00008|--|00011|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x01,	# | 00 00 00 01  |	|      data      |
-                			# ----------------	------------------
-                			# 
-                			# ----------------	------------------
-                0x0c, 0x01, 0x00, 0x00,	# |  0000000268  |	| message length |
+                0xff, 0xff, 0xff, 0xff,
+                0xff, 0xff, 0xff, 0xff,
+                0xff, 0xff, 0xff, 0xff,
+                0xff, 0xff, 0xff, 0xff,
+                ])
+
+        self.nlmsgbuf21 = bytearray([ # len: 660 + 16
+					# ----------------	------------------
+                0x9c, 0x00, 0x00, 0x00,	# |  0000000156  |	| message length |
                 0x00, 0x01, 0x02, 0x00,	# | 00256 | -M-- |	|  type | flags  |
                 0x00, 0x00, 0x00, 0x00,	# |  0000000000  |	| sequence number|
                 0xca, 0x24, 0x00, 0x00,	# |  0000009418  |	|     port ID    |
 					# ----------------	------------------
                 0x02, 0x00, 0x00, 0x00,	# | 02 00 00 00  |	|  extra header  |
-                0x34, 0x00, 0x01, 0x80,	# |00052|N-|00001|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x89,	# | 0a 60 fe 89  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0xac, 0x11, 0x24, 0xc8,	# | ac 11 24 c8  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
+                0x34, 0x00, 0x01, 0x80,	# |00052|N-|00001|	|len |flags| type|	+ CTA_TUPLE_ORIG
+                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|	  + CTA_TUPLE_IP
+                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|	    CTA_IP_V4_SRC
+                0x01, 0x01, 0x01, 0x01,	# | 01 01 01 01  |	|      data      |
+                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|	    CTA_IP_V4_DST
+                0x02, 0x02, 0x02, 0x02,	# | 02 02 02 02  |	|      data      |
+                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|	  + CTA_TUPLE_PROTO
+                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|	    CTA_PTOTO_NUM
+                0x11, 0x00, 0x00, 0x00,	# | 11 00 00 00  |	|      data      |
+                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|	    CTA_PROTO_SRC_PORT
+                0x04, 0x64, 0x00, 0x00,	# | 04 64 00 00  |	|      data      |
+                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|	    CTA_PROTO_DST_PORT
+                0x00, 0xa1, 0x00, 0x00,	# | 00 a1 00 00  |	|      data      |
+                0x34, 0x00, 0x02, 0x80,	# |00052|N-|00002|	|len |flags| type|	+ CTA_TUPLE_REPLY
+                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|	  + CTA_TUPLE_IP
+                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|	    CTA_TUPLE_V4_SRC
+                0x01, 0x01, 0x01, 0x01,	# | 01 01 01 01  |	|      data      |
+                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|	    CTA_TUP+E_V4_DST
+                0x02, 0x02, 0x02, 0x02,	# | 02 02 02 02  |	|      data      |
+                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|	  + CTA_TUPLE_PROTO
+                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|	    CTA_PROTO_NUM
+                0x11, 0x00, 0x00, 0x00,	# | 11 00 00 00  |	|      data      |
+                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|	    CTA_TUPLE_SRC_PORT
+                0x00, 0xa1, 0x00, 0x00,	# | 00 a1 00 00  |	|      data      |
+                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|	    CTA_TUPLE_DST_PORT
+                0x04, 0x64, 0x00, 0x00,	# | 04 64 00 00  |	|      data      |
+                0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|	CTA_TUPLE_STATUS
+                0x00, 0x00, 0x00, 0x0e,	# | 00 00 00 0e  |	|      data      |	  IPS_EXPECTED|SEEN_REPLY|ASSURED|CONFIRMED
+                0x08, 0x00, 0x07, 0x00,	# |00008|--|00007|	|len |flags| type|	CTA_TIMEOUT
+                0x00, 0x00, 0x00, 0x99,	# | 00 00 00 99  |	|      data      |
+                0x08, 0x00, 0x08, 0x00,	# |00008|--|00008|	|len |flags| type|	CTA_MARK
+                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
+                0x08, 0x00, 0x0b, 0x00,	# |00008|--|00011|	|len |flags| type|	CTA_USE
+                0x00, 0x00, 0x00, 0x01,	# | 00 00 00 01  |	|      data      |
+                			# ----------------	------------------
+					#
+					# ----------------	------------------
+                0xcc, 0x00, 0x00, 0x00,	# |  0000000204  |	| message length |
+                0x00, 0x01, 0x02, 0x00,	# | 00256 | -M-- |	|  type | flags  |
+                0x00, 0x00, 0x00, 0x00,	# |  0000000000  |	| sequence number|
+                0xca, 0x24, 0x00, 0x00,	# |  0000009418  |	|     port ID    |
+                			# ----------------	------------------
+                0x02, 0x00, 0x00, 0x00,	# | 02 00 00 00  |	|  extra header  |
+                0x34, 0x00, 0x01, 0x80,	# |00052|N-|00001|	|len |flags| type|	+ CTA_TUPLE_ORIG
+                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|	  + CTA_TUPLE_IP
+                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|	    CTA_IP_V4_SRC
+                0x03, 0x05, 0x05, 0x05,	# | 03 03 03 03  |	|      data      |
+                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|	    CTA_IP_V4_DST
+                0x06, 0x06, 0x06, 0x06,	# | 04 04 04 04  |	|      data      |
+                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|	  + CTA_TUPLE_PROTO
+                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|	    CTA_PROTO_NUM
                 0x06, 0x00, 0x00, 0x00,	# | 06 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
-                0xc6, 0x35, 0x00, 0x00,	# | c6 35 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
-                0x00, 0x50, 0x00, 0x00,	# | 00 50 00 00  |	|      data      |
-                0x34, 0x00, 0x02, 0x80,	# |00052|N-|00002|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0xac, 0x11, 0x24, 0xc8,	# | ac 11 24 c8  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x89,	# | 0a 60 fe 89  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
+                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|	    CTA_PROTO_SRC_PORT
+                0xc1, 0x79, 0x00, 0x00,	# | c1 79 00 00  |	|      data      |
+                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|	    CTA_PROTO_DST_PORT
+                0x01, 0xbd, 0x00, 0x00,	# | 01 bd 00 00  |	|      data      |
+                0x34, 0x00, 0x02, 0x80,	# |00052|N-|00002|	|len |flags| type|	  + CTA_TUPLE_REPLY
+                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|	    + CTA_TUPLE_IP
+                0x06, 0x06, 0x06, 0x06,	# |00008|--|00001|	|len |flags| type|	      CTA_IP_V4_SRC
+                0x04, 0x04, 0x04, 0x04,	# | 04 04 04 04  |	|      data      |
+                0x05, 0x05, 0x05, 0x05,	# |00008|--|00002|	|len |flags| type|	      CTA_IP_V4_DST
+                0x03, 0x03, 0x03, 0x03,	# | 03 03 03 03  |	|      data      |
+                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|	    + CTA_TUPLE_PROTO
+                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|	      CTA_PROTO_NUM
                 0x06, 0x00, 0x00, 0x00,	# | 06 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
-                0x00, 0x50, 0x00, 0x00,	# | 00 50 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
-                0xc6, 0x35, 0x00, 0x00,	# | c6 35 00 00  |	|      data      |
-                0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x08,	# | 00 00 00 08  |	|      data      |
-                0x08, 0x00, 0x07, 0x00,	# |00008|--|00007|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x62,	# | 00 00 00 62  |	|      data      |
-                0x1c, 0x00, 0x09, 0x80,	# |00028|N-|00009|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x1c, 0x00, 0x0a, 0x80,	# |00028|N-|00010|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x30, 0x00, 0x04, 0x80,	# |00048|N-|00004|	|len |flags| type|
-                0x2c, 0x00, 0x01, 0x80,	# |00044|N-|00001|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x01, 0x00, 0x00, 0x00,	# | 01 00 00 00  |	|      data      |
-                0x05, 0x00, 0x02, 0x00,	# |00005|--|00002|	|len |flags| type|
+                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|	      CTA_PROTO_SRC_PORT
+                0x01, 0xbd, 0x00, 0x00,	# | 01 bd 00 00  |	|      data      |
+                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|	      CTA_PROTO_DST_PORT
+                0xc1, 0x79, 0x00, 0x00,	# | c1 79 00 00  |	|      data      |
+                0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|	CTA_TUPLE_STATUS
+                0x00, 0x00, 0x00, 0x0e,	# | 00 00 00 0e  |	|      data      |	  IPS_EXPECTED|SEEN_REPLY|ASSURED|CONFIRMED
+                0x08, 0x00, 0x07, 0x00,	# |00008|--|00007|	|len |flags| type|	CTA_TIMEOUT
+                0x00, 0x06, 0x97, 0x65,	# | 00 06 97 65  |	|      data      |
+                0x30, 0x00, 0x04, 0x80,	# |00048|N-|00004|	|len |flags| type|	+ CTA_PROTOINFO
+                0x2c, 0x00, 0x01, 0x80,	# |00044|N-|00001|	|len |flags| type|	  + CTA_PROTOINFO_TCP
+                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|	    CTA_PROTOINFO_TCP_STATE
+                0x03, 0x00, 0x00, 0x00,	# | 03 00 00 00  |	|      data      |
+                0x05, 0x00, 0x02, 0x00,	# |00005|--|00002|	|len |flags| type|	    CTA_PROTOINFO_TCP_WSCALE_ORIGINAL
                 0x02, 0x00, 0x00, 0x00,	# | 02 00 00 00  |	|      data      |
-                0x05, 0x00, 0x03, 0x00,	# |00005|--|00003|	|len |flags| type|
+                0x05, 0x00, 0x03, 0x00,	# |00005|--|00003|	|len |flags| type|	    CTA_PROTOINFO_TCP_WSCALE_REPLY
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x06, 0x00, 0x04, 0x00,	# |00006|--|00004|	|len |flags| type|
-                0x03, 0x00, 0x00, 0x00,	# | 03 00 00 00  |	|      data      |
-                0x06, 0x00, 0x05, 0x00,	# |00006|--|00005|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x08, 0x00,	# |00008|--|00008|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x0c, 0x00,	# |00008|--|00012|	|len |flags| type|
-                0x17, 0x1f, 0xa9, 0xe8,	# | 17 1f a9 e8  |	|      data      |
-                0x08, 0x00, 0x0b, 0x00,	# |00008|--|00011|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x01,	# | 00 00 00 01  |	|      data      |
-                			# ----------------	------------------
-                			# 
-                			# ----------------	------------------
-                0x0c, 0x01, 0x00, 0x00,	# |  0000000268  |	| message length |
-                0x00, 0x01, 0x02, 0x00,	# | 00256 | -M-- |	|  type | flags  |
-                0x00, 0x00, 0x00, 0x00,	# |  0000000000  |	| sequence number|
-                0xca, 0x24, 0x00, 0x00,	# |  0000009418  |	|     port ID    |
-                			# ----------------	------------------
-                0x02, 0x00, 0x00, 0x00,	# | 02 00 00 00  |	|  extra header  |
-                0x34, 0x00, 0x01, 0x80,	# |00052|N-|00001|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x85, 0x9a, 0x4b, 0xf1,	# | 85 9a 4b f1  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0xa1,	# | 0a 60 fe a1  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x06, 0x00, 0x00, 0x00,	# | 06 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
-                0x0f, 0x49, 0x00, 0x00,	# | 0f 49 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
-                0x01, 0x01, 0x00, 0x00,	# | 01 01 00 00  |	|      data      |
-                0x34, 0x00, 0x02, 0x80,	# |00052|N-|00002|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0xa1,	# | 0a 60 fe a1  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x85, 0x9a, 0x4b, 0xf1,	# | 85 9a 4b f1  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x06, 0x00, 0x00, 0x00,	# | 06 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
-                0x01, 0x01, 0x00, 0x00,	# | 01 01 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
-                0x0f, 0x49, 0x00, 0x00,	# | 0f 49 00 00  |	|      data      |
-                0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x0e,	# | 00 00 00 0e  |	|      data      |
-                0x08, 0x00, 0x07, 0x00,	# |00008|--|00007|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x52,	# | 00 00 00 52  |	|      data      |
-                0x1c, 0x00, 0x09, 0x80,	# |00028|N-|00009|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x1c, 0x00, 0x0a, 0x80,	# |00028|N-|00010|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x30, 0x00, 0x04, 0x80,	# |00048|N-|00004|	|len |flags| type|
-                0x2c, 0x00, 0x01, 0x80,	# |00044|N-|00001|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x07, 0x00, 0x00, 0x00,	# | 07 00 00 00  |	|      data      |
-                0x05, 0x00, 0x02, 0x00,	# |00005|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x05, 0x00, 0x03, 0x00,	# |00005|--|00003|	|len |flags| type|
-                0x07, 0x00, 0x00, 0x00,	# | 07 00 00 00  |	|      data      |
-                0x06, 0x00, 0x04, 0x00,	# |00006|--|00004|	|len |flags| type|
-                0x21, 0x00, 0x00, 0x00,	# | 21 00 00 00  |	|      data      |
-                0x06, 0x00, 0x05, 0x00,	# |00006|--|00005|	|len |flags| type|
-                0x25, 0x00, 0x00, 0x00,	# | 25 00 00 00  |	|      data      |
-                0x08, 0x00, 0x08, 0x00,	# |00008|--|00008|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x0c, 0x00,	# |00008|--|00012|	|len |flags| type|
-                0x17, 0x1f, 0xa0, 0x68,	# | 17 1f a0 68  |	|      data      |
-                0x08, 0x00, 0x0b, 0x00,	# |00008|--|00011|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x01,	# | 00 00 00 01  |	|      data      |
-                			# ----------------	------------------
-                			#
-                			# ----------------	------------------
-                0xec, 0x00, 0x00, 0x00,	# |  0000000236  |	| message length |
-                0x00, 0x01, 0x02, 0x00,	# | 00256 | -M-- |	|  type | flags  |
-                0x00, 0x00, 0x00, 0x00,	# |  0000000000  |	| sequence number|
-                0xca, 0x24, 0x00, 0x00,	# |  0000009418  |	|     port ID    |
-					# ----------------	------------------
-                0x02, 0x00, 0x00, 0x00,	# | 02 00 00 00  |	|  extra header  |
-                0x3c, 0x00, 0x01, 0x80,	# |00060|N-|00001|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x92,	# | 0a 60 fe 92  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x60, 0x65, 0x01,	# | 0a 60 65 01  |	|      data      |
-                0x24, 0x00, 0x02, 0x80,	# |00036|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x01, 0x00, 0x00, 0x00,	# | 01 00 00 00  |	|      data      |
-                0x06, 0x00, 0x04, 0x00,	# |00006|--|00004|	|len |flags| type|
-                0xd2, 0x04, 0x00, 0x00,	# | d2 04 00 00  |	|      data      |
-                0x05, 0x00, 0x05, 0x00,	# |00005|--|00005|	|len |flags| type|
-                0x08, 0x00, 0x00, 0x00,	# | 08 00 00 00  |	|      data      |
-                0x05, 0x00, 0x06, 0x00,	# |00005|--|00006|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x3c, 0x00, 0x02, 0x80,	# |00060|N-|00002|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x60, 0x65, 0x01,	# | 0a 60 65 01  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x92,	# | 0a 60 fe 92  |	|      data      |
-                0x24, 0x00, 0x02, 0x80,	# |00036|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x01, 0x00, 0x00, 0x00,	# | 01 00 00 00  |	|      data      |
-                0x06, 0x00, 0x04, 0x00,	# |00006|--|00004|	|len |flags| type|
-                0xd2, 0x04, 0x00, 0x00,	# | d2 04 00 00  |	|      data      |
-                0x05, 0x00, 0x05, 0x00,	# |00005|--|00005|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x05, 0x00, 0x06, 0x00,	# |00005|--|00006|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x0a,	# | 00 00 00 0a  |	|      data      |
-                0x08, 0x00, 0x07, 0x00,	# |00008|--|00007|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x1c, 0x00, 0x09, 0x80,	# |00028|N-|00009|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x1c, 0x00, 0x0a, 0x80,	# |00028|N-|00010|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x08, 0x00,	# |00008|--|00008|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x0c, 0x00,	# |00008|--|00012|	|len |flags| type|
-                0x17, 0x23, 0xc1, 0x98,	# | 17 23 c1 98  |	|      data      |
-                0x08, 0x00, 0x0b, 0x00,	# |00008|--|00011|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x01,	# | 00 00 00 01  |	|      data      |
-                			# ----------------	------------------
-					#
-					# ----------------	------------------
-                0xec, 0x00, 0x00, 0x00,	# |  0000000236  |	| message length |
-                0x00, 0x01, 0x02, 0x00,	# | 00256 | -M-- |	|  type | flags  |
-                0x00, 0x00, 0x00, 0x00,	# |  0000000000  |	| sequence number|
-                0xca, 0x24, 0x00, 0x00,	# |  0000009418  |	|     port ID    |
- 					# ----------------	------------------
-                0x02, 0x00, 0x00, 0x00,	# | 02 00 00 00  |	|  extra header  |
-                0x3c, 0x00, 0x01, 0x80,	# |00060|N-|00001|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x92,	# | 0a 60 fe 92  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x08, 0xfb, 0x05,	# | 0a 08 fb 05  |	|      data      |
-                0x24, 0x00, 0x02, 0x80,	# |00036|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x01, 0x00, 0x00, 0x00,	# | 01 00 00 00  |	|      data      |
-                0x06, 0x00, 0x04, 0x00,	# |00006|--|00004|	|len |flags| type|
-                0xd2, 0x04, 0x00, 0x00,	# | d2 04 00 00  |	|      data      |
-                0x05, 0x00, 0x05, 0x00,	# |00005|--|00005|	|len |flags| type|
-                0x08, 0x00, 0x00, 0x00,	# | 08 00 00 00  |	|      data      |
-                0x05, 0x00, 0x06, 0x00,	# |00005|--|00006|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x3c, 0x00, 0x02, 0x80,	# |00060|N-|00002|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x08, 0xfb, 0x05,	# | 0a 08 fb 05  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x92,	# | 0a 60 fe 92  |	|      data      |
-                0x24, 0x00, 0x02, 0x80,	# |00036|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x01, 0x00, 0x00, 0x00,	# | 01 00 00 00  |	|      data      |
-                0x06, 0x00, 0x04, 0x00,	# |00006|--|00004|	|len |flags| type|
-                0xd2, 0x04, 0x00, 0x00,	# | d2 04 00 00  |	|      data      |
-                0x05, 0x00, 0x05, 0x00,	# |00005|--|00005|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x05, 0x00, 0x06, 0x00,	# |00005|--|00006|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x0a,	# | 00 00 00 0a  |	|      data      |
-                0x08, 0x00, 0x07, 0x00,	# |00008|--|00007|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x05,	# | 00 00 00 05  |	|      data      |
-                0x1c, 0x00, 0x09, 0x80,	# |00028|N-|00009|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x1c, 0x00, 0x0a, 0x80,	# |00028|N-|00010|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x08, 0x00,	# |00008|--|00008|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x0c, 0x00,	# |00008|--|00012|	|len |flags| type|
-                0x17, 0x20, 0xb1, 0x98,	# | 17 20 b1 98  |	|      data      |
-                0x08, 0x00, 0x0b, 0x00,	# |00008|--|00011|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x01,	# | 00 00 00 01  |	|      data      |
-                			# ----------------	------------------
-					#
-					# ----------------	------------------
-                0x0c, 0x01, 0x00, 0x00,	# |  0000000268  |	| message length |
-                0x00, 0x01, 0x02, 0x00,	# | 00256 | -M-- |	|  type | flags  |
-                0x00, 0x00, 0x00, 0x00,	# |  0000000000  |	| sequence number|
-                0xca, 0x24, 0x00, 0x00,	# |  0000009418  |	|     port ID    |
-                			# ----------------	------------------
-                0x02, 0x00, 0x00, 0x00,	# | 02 00 00 00  |	|  extra header  |
-                0x34, 0x00, 0x01, 0x80,	# |00052|N-|00001|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x84,	# | 0a 60 fe 84  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x00, 0x33, 0x14,	# | 0a 00 33 14  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x06, 0x00, 0x00, 0x00,	# | 06 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
-                0x0f, 0xaa, 0x00, 0x00,	# | 0f aa 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
-                0xe8, 0xcb, 0x00, 0x00,	# | e8 cb 00 00  |	|      data      |
-                0x34, 0x00, 0x02, 0x80,	# |00052|N-|00002|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x00, 0x33, 0x14,	# | 0a 00 33 14  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x84,	# | 0a 60 fe 84  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x06, 0x00, 0x00, 0x00,	# | 06 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
-                0xe8, 0xcb, 0x00, 0x00,	# | e8 cb 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
-                0x0f, 0xaa, 0x00, 0x00,	# | 0f aa 00 00  |	|      data      |
-                0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x0e,	# | 00 00 00 0e  |	|      data      |
-                0x08, 0x00, 0x07, 0x00,	# |00008|--|00007|	|len |flags| type|
-                0x00, 0x06, 0x97, 0x45,	# | 00 06 97 45  |	|      data      |
-                0x1c, 0x00, 0x09, 0x80,	# |00028|N-|00009|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x1c, 0x00, 0x0a, 0x80,	# |00028|N-|00010|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x30, 0x00, 0x04, 0x80,	# |00048|N-|00004|	|len |flags| type|
-                0x2c, 0x00, 0x01, 0x80,	# |00044|N-|00001|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x03, 0x00, 0x00, 0x00,	# | 03 00 00 00  |	|      data      |
-                0x05, 0x00, 0x02, 0x00,	# |00005|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x05, 0x00, 0x03, 0x00,	# |00005|--|00003|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x06, 0x00, 0x04, 0x00,	# |00006|--|00004|	|len |flags| type|
-                0x22, 0x00, 0x00, 0x00,	# | 22 00 00 00  |	|      data      |
-                0x06, 0x00, 0x05, 0x00,	# |00006|--|00005|	|len |flags| type|
-                0x22, 0x00, 0x00, 0x00,	# | 22 00 00 00  |	|      data      |
-                0x08, 0x00, 0x08, 0x00,	# |00008|--|00008|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x0c, 0x00,	# |00008|--|00012|	|len |flags| type|
-                0x17, 0x70, 0x55, 0x28,	# | 17 70 55 28  |	|      data      |
-                0x08, 0x00, 0x0b, 0x00,	# |00008|--|00011|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x01,	# | 00 00 00 01  |	|      data      |
-                			# ----------------	------------------
-                			# 
-                			# ---------------	------------------ 
-                0xdc, 0x00, 0x00, 0x00,	# |  0000000220  |	| message length |
-                0x00, 0x01, 0x02, 0x00,	# | 00256 | -M-- |	|  type | flags  |
-                0x00, 0x00, 0x00, 0x00,	# |  0000000000  |	| sequence number|
-                0xca, 0x24, 0x00, 0x00,	# |  0000009418  |	|     port ID    |
-					# ----------------	------------------
-                0x02, 0x00, 0x00, 0x00,	# | 02 00 00 00  |	|  extra header  |
-                0x34, 0x00, 0x01, 0x80,	# |00052|N-|00001|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x92,	# | 0a 60 fe 92  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x60, 0xc8, 0x71,	# | 0a 60 c8 71  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x11, 0x00, 0x00, 0x00,	# | 11 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
-                0x04, 0x64, 0x00, 0x00,	# | 04 64 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
-                0x00, 0xa1, 0x00, 0x00,	# | 00 a1 00 00  |	|      data      |
-                0x34, 0x00, 0x02, 0x80,	# |00052|N-|00002|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x60, 0xc8, 0x71,	# | 0a 60 c8 71  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x92,	# | 0a 60 fe 92  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x11, 0x00, 0x00, 0x00,	# | 11 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
-                0x00, 0xa1, 0x00, 0x00,	# | 00 a1 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
-                0x04, 0x64, 0x00, 0x00,	# | 04 64 00 00  |	|      data      |
-                0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x0e,	# | 00 00 00 0e  |	|      data      |
-                0x08, 0x00, 0x07, 0x00,	# |00008|--|00007|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x34,	# | 00 00 00 34  |	|      data      |
-                0x1c, 0x00, 0x09, 0x80,	# |00028|N-|00009|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x1c, 0x00, 0x0a, 0x80,	# |00028|N-|00010|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x08, 0x00,	# |00008|--|00008|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x0c, 0x00,	# |00008|--|00012|	|len |flags| type|
-                0x12, 0xc8, 0xb7, 0x88,	# | 12 c8 b7 88  |	|      data      |
-                0x08, 0x00, 0x0b, 0x00,	# |00008|--|00011|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x01,	# | 00 00 00 01  |	|      data      |
-                			# ----------------	------------------
-                			#
-					# 
-                			# 
-                			# ----------------	------------------
-                0xdc, 0x00, 0x00, 0x00,	# |  0000000220  |	| message length |
-                0x00, 0x01, 0x02, 0x00,	# | 00256 | -M-- |	|  type | flags  |
-                0x00, 0x00, 0x00, 0x00,	# |  0000000000  |	| sequence number|
-                0xca, 0x24, 0x00, 0x00,	# |  0000009418  |	|     port ID    |
-                			# ----------------	------------------
-                0x02, 0x00, 0x00, 0x00,	# | 02 00 00 00  |	|  extra header  |
-                0x34, 0x00, 0x01, 0x80,	# |00052|N-|00001|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x92,	# | 0a 60 fe 92  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x85, 0x9a, 0xb0, 0xf5,	# | 85 9a b0 f5  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x11, 0x00, 0x00, 0x00,	# | 11 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
-                0x04, 0x64, 0x00, 0x00,	# | 04 64 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
-                0x00, 0xa1, 0x00, 0x00,	# | 00 a1 00 00  |	|      data      |
-                0x34, 0x00, 0x02, 0x80,	# |00052|N-|00002|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x85, 0x9a, 0xb0, 0xf5,	# | 85 9a b0 f5  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x92,	# | 0a 60 fe 92  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x11, 0x00, 0x00, 0x00,	# | 11 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
-                0x00, 0xa1, 0x00, 0x00,	# | 00 a1 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
-                0x04, 0x64, 0x00, 0x00,	# | 04 64 00 00  |	|      data      |
-                0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x0a,	# | 00 00 00 0a  |	|      data      |
-                0x08, 0x00, 0x07, 0x00,	# |00008|--|00007|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x0a,	# | 00 00 00 0a  |	|      data      |
-                0x1c, 0x00, 0x09, 0x80,	# |00028|N-|00009|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x1c, 0x00, 0x0a, 0x80,	# |00028|N-|00010|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x08, 0x00,	# |00008|--|00008|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x0c, 0x00,	# |00008|--|00012|	|len |flags| type|
-                0x17, 0x40, 0xf2, 0xc8,	# | 17 40 f2 c8  |	|      data      |
-                0x08, 0x00, 0x0b, 0x00,	# |00008|--|00011|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x01,	# | 00 00 00 01  |	|      data      |
-                			# ----------------	------------------
-                			#
-                			# ----------------	------------------
-                0xdc, 0x00, 0x00, 0x00,	# |  0000000220  |	| message length |
-                0x00, 0x01, 0x02, 0x00,	# | 00256 | -M-- |	|  type | flags  |
-                0x00, 0x00, 0x00, 0x00,	# |  0000000000  |	| sequence number|
-                0xca, 0x24, 0x00, 0x00,	# |  0000009418  |	|     port ID    |
-                			# ----------------	------------------
-                0x02, 0x00, 0x00, 0x00,	# | 02 00 00 00  |	|  extra header  |
-                0x34, 0x00, 0x01, 0x80,	# |00052|N-|00001|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x92,	# | 0a 60 fe 92  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x60, 0xc8, 0x70,	# | 0a 60 c8 70  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x11, 0x00, 0x00, 0x00,	# | 11 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
-                0x04, 0x64, 0x00, 0x00,	# | 04 64 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
-                0x00, 0xa1, 0x00, 0x00,	# | 00 a1 00 00  |	|      data      |
-                0x34, 0x00, 0x02, 0x80,	# |00052|N-|00002|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x60, 0xc8, 0x70,	# | 0a 60 c8 70  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x92,	# | 0a 60 fe 92  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x11, 0x00, 0x00, 0x00,	# | 11 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
-                0x00, 0xa1, 0x00, 0x00,	# | 00 a1 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
-                0x04, 0x64, 0x00, 0x00,	# | 04 64 00 00  |	|      data      |
-                0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x0e,	# | 00 00 00 0e  |	|      data      |
-                0x08, 0x00, 0x07, 0x00,	# |00008|--|00007|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x3b,	# | 00 00 00 3b  |	|      data      |
-                0x1c, 0x00, 0x09, 0x80,	# |00028|N-|00009|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x1c, 0x00, 0x0a, 0x80,	# |00028|N-|00010|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x08, 0x00,	# |00008|--|00008|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x0c, 0x00,	# |00008|--|00012|	|len |flags| type|
-                0x00, 0x18, 0x29, 0xe8,	# | 00 18 29 e8  |	|      data      |
-                0x08, 0x00, 0x0b, 0x00,	# |00008|--|00011|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x01,	# | 00 00 00 01  |	|      data      |
-                			# ----------------	------------------
-                			#
-                			# ----------------	------------------
-                0x0c, 0x01, 0x00, 0x00, # |  0000000268  |	| message length |
-                0x00, 0x01, 0x02, 0x00,	# | 00256 | -M-- |	|  type | flags  |
-                0x00, 0x00, 0x00, 0x00,	# |  0000000000  |	| sequence number|
-                0xca, 0x24, 0x00, 0x00,	# |  0000009418  |	|     port ID    |
-					# ----------------	------------------
-                0x02, 0x00, 0x00, 0x00,	# | 02 00 00 00  |	|  extra header  |
-                0x34, 0x00, 0x01, 0x80,	# |00052|N-|00001|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0xac, 0x10, 0x51, 0x13,	# | ac 10 51 13  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0xc1,	# | 0a 60 fe c1  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x06, 0x00, 0x00, 0x00,	# | 06 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
-                0xea, 0xf6, 0x00, 0x00,	# | ea f6 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
-                0x00, 0x50, 0x00, 0x00,	# | 00 50 00 00  |	|      data      |
-                0x34, 0x00, 0x02, 0x80,	# |00052|N-|00002|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0xc1,	# | 0a 60 fe c1  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0xac, 0x10, 0x51, 0x13,	# | ac 10 51 13  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x06, 0x00, 0x00, 0x00,	# | 06 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
-                0x00, 0x50, 0x00, 0x00,	# | 00 50 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
-                0xea, 0xf6, 0x00, 0x00,	# | ea f6 00 00  |	|      data      |
-                0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x0e,	# | 00 00 00 0e  |	|      data      |
-                0x08, 0x00, 0x07, 0x00,	# |00008|--|00007|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x6f,	# | 00 00 00 6f  |	|      data      |
-                0x1c, 0x00, 0x09, 0x80,	# |00028|N-|00009|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x1c, 0x00, 0x0a, 0x80,	# |00028|N-|00010|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x30, 0x00, 0x04, 0x80,	# |00048|N-|00004|	|len |flags| type|
-                0x2c, 0x00, 0x01, 0x80,	# |00044|N-|00001|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
-                0x07, 0x00, 0x00, 0x00,	# | 07 00 00 00  |	|      data      |
-                0x05, 0x00, 0x02, 0x00,	# |00005|--|00002|	|len |flags| type|
-                0x08, 0x00, 0x00, 0x00,	# | 08 00 00 00  |	|      data      |
-                0x05, 0x00, 0x03, 0x00,	# |00005|--|00003|	|len |flags| type|
-                0x07, 0x00, 0x00, 0x00,	# | 07 00 00 00  |	|      data      |
-                0x06, 0x00, 0x04, 0x00,	# |00006|--|00004|	|len |flags| type|
-                0x27, 0x00, 0x00, 0x00,	# | 27 00 00 00  |	|      data      |
-                0x06, 0x00, 0x05, 0x00,	# |00006|--|00005|	|len |flags| type|
+                0x06, 0x00, 0x04, 0x00,	# |00006|--|00004|	|len |flags| type|	    CTA_PROTOINFO_TCP_FLAGS_ORIGINAL
                 0x23, 0x00, 0x00, 0x00,	# | 23 00 00 00  |	|      data      |
-                0x08, 0x00, 0x08, 0x00,	# |00008|--|00008|	|len |flags| type|
+                0x06, 0x00, 0x05, 0x00,	# |00006|--|00005|	|len |flags| type|	    CTA_PROTOINFO_TCP_FLAGS_REPLY
+                0x23, 0x00, 0x00, 0x00,	# | 23 00 00 00  |	|      data      |
+                0x08, 0x00, 0x08, 0x00,	# |00008|--|00008|	|len |flags| type|	CTA_MARK
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x0c, 0x00,	# |00008|--|00012|	|len |flags| type|
-                0x17, 0x44, 0xfe, 0xa8,	# | 17 44 fe a8  |	|      data      |
-                0x08, 0x00, 0x0b, 0x00,	# |00008|--|00011|	|len |flags| type|
+                0x08, 0x00, 0x0b, 0x00,	# |00008|--|00011|	|len |flags| type|	CTA_USE
                 0x00, 0x00, 0x00, 0x01,	# | 00 00 00 01  |	|      data      |
                 			# ----------------	------------------
-                			#
-					# ----------------	------------------
-                0xdc, 0x00, 0x00, 0x00,	# |  0000000220  |	| message length |
+					#
+                			# ----------------	------------------
+		0x9c, 0x00, 0x00, 0x00,	# |  0000000156  |	| message length |
                 0x00, 0x01, 0x02, 0x00,	# | 00256 | -M-- |	|  type | flags  |
                 0x00, 0x00, 0x00, 0x00,	# |  0000000000  |	| sequence number|
                 0xca, 0x24, 0x00, 0x00,	# |  0000009418  |	|     port ID    |
-                			# ----------------	------------------
-		0x02, 0x00, 0x00, 0x00,	# | 02 00 00 00  |	|  extra header  |
-                0x34, 0x00, 0x01, 0x80,	# |00052|N-|00001|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x92,	# | 0a 60 fe 92  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x60, 0xc8, 0xd8,	# | 0a 60 c8 d8  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
+                                        # ----------------	------------------
+                0x02, 0x00, 0x00, 0x00,	# | 02 00 00 00  |	|  extra header  |
+                0x34, 0x00, 0x01, 0x80,	# |00052|N-|00001|	|len |flags| type|	+ CTA_TUPLE_ORIG
+                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|	  + CTA_TUPLE_IP
+                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|	    CTA_IP_V4_SRC
+                0x55, 0x55, 0x55, 0x55,	# | 55 55 55 55  |	|      data      |
+                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|	    CTA_IP_V4_DST
+                0x66, 0x66, 0x66, 0x66,	# | 66 66 66 66  |	|      data      |
+                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|	  + CTA_TUPLE_PROTO
+                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|	    CTA_PROTO_NUM
                 0x11, 0x00, 0x00, 0x00,	# | 11 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
-                0x04, 0x64, 0x00, 0x00,	# | 04 64 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
-                0x00, 0xa1, 0x00, 0x00,	# | 00 a1 00 00  |	|      data      |
-                0x34, 0x00, 0x02, 0x80,	# |00052|N-|00002|	|len |flags| type|
-                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|
-                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|
-                0x0a, 0x60, 0xc8, 0xd8,	# | 0a 60 c8 d8  |	|      data      |
-                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|
-                0x0a, 0x60, 0xfe, 0x92,	# | 0a 60 fe 92  |	|      data      |
-                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|
-                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|
+                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|	    CTA_PROTO_SRC_PORT
+                0xca, 0xda, 0x00, 0x00,	# | ca da 00 00  |	|      data      |
+                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|	    CTA_PROTO_DST_PORT
+                0x02, 0x02, 0x00, 0x00,	# | 02 02 00 00  |	|      data      |
+                0x34, 0x00, 0x02, 0x80,	# |00052|N-|00002|	|len |flags| type|	  + CTA_TUPLE_REPLY
+                0x14, 0x00, 0x01, 0x80,	# |00020|N-|00001|	|len |flags| type|	    + CTA_TUPLE_IP
+                0x08, 0x00, 0x01, 0x00,	# |00008|--|00001|	|len |flags| type|	      CTA_IP_V4_SRC
+                0x66, 0x66, 0x66, 0x66,	# | 66 66 66 66  |	|      data      |
+                0x08, 0x00, 0x02, 0x00,	# |00008|--|00002|	|len |flags| type|	      CTA_IP_V4_DST
+                0x55, 0x55, 0x55, 0x55,	# | 55 55 55 55  |	|      data      |
+                0x1c, 0x00, 0x02, 0x80,	# |00028|N-|00002|	|len |flags| type|	    + CTA_TUPLE_PROTO
+                0x05, 0x00, 0x01, 0x00,	# |00005|--|00001|	|len |flags| type|	      CTA_PROTO_NUM
                 0x11, 0x00, 0x00, 0x00,	# | 11 00 00 00  |	|      data      |
-                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|
-                0x00, 0xa1, 0x00, 0x00,	# | 00 a1 00 00  |	|      data      |
-                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|
-                0x04, 0x64, 0x00, 0x00,	# | 04 64 00 00  |	|      data      |
-                0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x0e,	# | 00 00 00 0e  |	|      data      |
-                0x08, 0x00, 0x07, 0x00,	# |00008|--|00007|	|len |flags| type|
-                0x00, 0x00, 0x00, 0xa4,	# | 00 00 00 a4  |	|      data      |
-                0x1c, 0x00, 0x09, 0x80,	# |00028|N-|00009|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
+                0x06, 0x00, 0x02, 0x00,	# |00006|--|00002|	|len |flags| type|	      CTA_PROTO_SRC_PORT
+                0x02, 0x02, 0x00, 0x00,	# | 02 02 00 00  |	|      data      |
+                0x06, 0x00, 0x03, 0x00,	# |00006|--|00003|	|len |flags| type|	      CTA_PROTO_DST_PORT
+                0xca, 0xda, 0x00, 0x00,	# | ca da 00 00  |	|      data      |
+                0x08, 0x00, 0x03, 0x00,	# |00008|--|00003|	|len |flags| type|	CTA_TUPLE_STATUS
+                0x00, 0x00, 0x00, 0x08,	# | 00 00 00 08  |	|      data      |	  IPS_CONFIRMED
+                0x08, 0x00, 0x07, 0x00,	# |00008|--|00007|	|len |flags| type|	CTA_TIMEOUT
+                0x00, 0x00, 0x00, 0x13,	# | 00 00 00 13  |	|      data      |
+                0x08, 0x00, 0x08, 0x00,	# |00008|--|00008|	|len |flags| type|	CTA_MARK
                 0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x1c, 0x00, 0x0a, 0x80,	# |00028|N-|00010|	|len |flags| type|
-                0x0c, 0x00, 0x01, 0x00,	# |00012|--|00001|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x0c, 0x00, 0x02, 0x00,	# |00012|--|00002|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x08, 0x00,	# |00008|--|00008|	|len |flags| type|
-                0x00, 0x00, 0x00, 0x00,	# | 00 00 00 00  |	|      data      |
-                0x08, 0x00, 0x0c, 0x00,	# |00008|--|00012|	|len |flags| type|
-                0x15, 0x96, 0xd7, 0x88,	# | 15 96 d7 88  |	|      data      |
-                0x08, 0x00, 0x0b, 0x00,	# |00008|--|00011|	|len |flags| type|
+                0x08, 0x00, 0x0b, 0x00,	# |00008|--|00011|	|len |flags| type|	CTA_USE
                 0x00, 0x00, 0x00, 0x01,	# | 00 00 00 01  |	|      data      |
-                ])                      # ----------------	------------------
-                
-    def test_conntrack_nlmsg_parse(self):
+                			# ----------------	------------------
+                ])
+
+
+    def _test_conntrack_nlmsg_parse(self):
         nlh1 = netlink.Nlmsghdr(self.nlmsgbuf1)
         ct1 = nfct.conntrack_new()
         nfct.conntrack_nlmsg_parse(nlh1, ct1)
@@ -1051,39 +478,212 @@ class TestSuite(unittest.TestCase):
         mnl.nlmsg_fprint(self.nlmsgbuf2, nfnl.Nfgenmsg.sizeof(), out=sys.stderr)
 
 
+    # almost just calling them
+    def test_conntrack(self):
+        try:
+            ct = nfct.Conntrack()
+            ct.destroy()
+        except Exception as e:
+            self.fail("could not create or destroy nf_conntrack: %s" % e)
 
-        # Conntrack.__init__(ct=None)
-        # Conntrack.destroy(self)
-        # Conntrack.__del__(self)
-        # Conntrack.clone(self)
-        # Conntrack.setobjopt(self, o)
-        # Conntrack.getobjopt(self, o)
-        # Conntrack.set_attr_l(self, a, v)
-        # Conntrack.set_attr(self, a, v)
-        # Conntrack.set_attr_u8(self, a, v)
-        # Conntrack.set_attr_u16(self, a, v)
-        # Conntrack.set_attr_u32(self, a, v)
-        # Conntrack.set_attr_u64(self, a, v)
-        # Conntrack.get_attr(self, a)
-        # Conntrack.get_attr_as(self, a, c)
-        # Conntrack.get_attr_u8(self, a)
-        # Conntrack.get_attr_u16(self, a)
-        # Conntrack.get_attr_u32(self, a)
-        # Conntrack.get_attr_u64(self, a)
-        # Conntrack.attr_is_set(self, a)
-        # Conntrack.attr_is_set_array(self, l)
-        # Conntrack.attr_unset(self, a)
-        # Conntrack.set_attr_grp(self, a, d)
-        # Conntrack.get_attr_grp(self, a, d)
-        # Conntrack.get_attr_grp_as(self, a, c)
-        # Conntrack.attr_grp_is_set(self, a)
-        # Conntrack.attr_grp_unset(self, a)
-        # Conntrack.snprintf(self, s, m, o, f)
-        # Conntrack.snprintf_labels(self, s, m, o, f, l)
-        # Conntrack.compare(self, ct2)
-        # Conntrack.cmp(self, ct2, f)
-        # Conntrack.copy(self, ct2, f)
-        # Conntrack.copy_attr(self, ct2, t)
+        try:
+            ct = nfct.Conntrack()
+            del ct
+        except Exception as e:
+            self.fail("could not create or destroy nf_conntrack: %s" % e)
+
+    def test_clone(self):
+        ct = nfct.Conntrack()
+        ct.set_attr_u8(nfct.ATTR_ORIG_L3PROTO, 11)
+        clone = ct.clone()
+        self.assertNotEqual(ct._ct, clone._ct)
+        self.assertEqual(clone.get_attr_u8(nfct.ATTR_ORIG_L3PROTO), 11)
+        clone.destroy()
+        ct.destroy()
+
+
+    def test_objopt(self):
+        ct = nfct.Conntrack()
+        # ct.set_attr_u32(nfct.ATTR_STATUS, nfctcm.IPS_SRC_NAT_DONE)
+        ct.set_attr_u32(nfct.ATTR_REPL_IPV4_DST, 1)
+        self.assertEqual(ct.getobjopt(nfct.NFCT_GOPT_IS_SNAT), 1)
+        ct.setobjopt(nfct.NFCT_SOPT_UNDO_SNAT)
+        self.assertEqual(ct.getobjopt(nfct.NFCT_GOPT_IS_SNAT), 0)
+        ct.destroy()
+
+
+    def test_set_attr_l(self):
+        ct = nfct.Conntrack()
+        a1 = ctypes.c_uint32(0x12345678)
+        ct.set_attr_l(nfct.ATTR_ORIG_IPV4_SRC, a1)
+        a2 = ct.get_attr_as(nfct.ATTR_ORIG_IPV4_SRC, ctypes.c_uint32)
+        self.assertEqual(a1.value, a2.value)
+        ct.destroy()
+
+
+    def test_attr(self):
+        ct = nfct.Conntrack()
+        a1 = ctypes.c_uint32(0x12345678)
+        ct.set_attr(nfct.ATTR_ORIG_IPV4_SRC, a1)
+        a2 = ct.get_attr_as(nfct.ATTR_ORIG_IPV4_SRC, ctypes.c_uint32)
+        self.assertEqual(a1.value, a2.value)
+        ct.destroy()
+
+
+    def test_attr_u8(self):
+        ct = nfct.Conntrack()
+        ct.set_attr_u8(nfct.ATTR_ORIG_L3PROTO, 123)
+        self.assertEqual(ct.get_attr_u8(nfct.ATTR_ORIG_L3PROTO), 123)
+        ct.destroy()
+
+
+    def test_attr_u16(self):
+        ct = nfct.Conntrack()
+        ct.set_attr_u16(nfct.ATTR_ORIG_PORT_SRC, 0x1234)
+        self.assertEqual(ct.get_attr_u16(nfct.ATTR_ORIG_PORT_SRC), 0x1234)
+        ct.destroy()
+
+    def test_attr_u32(self):
+        ct = nfct.Conntrack()
+        ct.set_attr_u32(nfct.ATTR_ORIG_IPV4_DST, 0x12345678)
+        self.assertEqual(ct.get_attr_u32(nfct.ATTR_ORIG_IPV4_DST), 0x12345678)
+        ct.destroy()
+
+    def test_attr_u64(self):
+        ct = nfct.Conntrack()
+        # ct.set_attr_u64(nfct.ATTR_ORIG_COUNTER_PACKETS, 0x123456789abcdef)
+        # ... is set_attr_do_nothing
+        ct.set_attr_u64(nfct.ATTR_DCCP_HANDSHAKE_SEQ, 0x123456789abcdef)
+        self.assertEqual(ct.get_attr_u64(nfct.ATTR_DCCP_HANDSHAKE_SEQ), 0x123456789abcdef)
+        ct.destroy()
+
+
+    def test_attr_is_set(self):
+        ct = nfct.Conntrack()
+        ct.set_attr_u64(nfct.ATTR_DCCP_HANDSHAKE_SEQ, 0x123456789abcdef)
+        self.assertTrue(ct.attr_is_set(nfct.ATTR_DCCP_HANDSHAKE_SEQ))
+        self.assertFalse(ct.attr_is_set(nfct.ATTR_ORIG_COUNTER_PACKETS))
+        ct.destroy()
+
+
+    def test_attr_is_set_array(self):
+        ct = nfct.Conntrack()
+        ct.set_attr_u8(nfct.ATTR_ORIG_L3PROTO, 123)
+        ct.set_attr_u16(nfct.ATTR_ORIG_PORT_SRC, 0x1234)
+        ct.set_attr_u32(nfct.ATTR_ORIG_IPV4_DST, 0x12345678)
+        a = [nfct.ATTR_ORIG_L3PROTO, nfct.ATTR_ORIG_L3PROTO, nfct.ATTR_ORIG_IPV4_DST]
+        self.assertTrue(ct.attr_is_set_array(a))
+        a = [nfct.ATTR_ORIG_L3PROTO, nfct.ATTR_ORIG_L3PROTO, nfct.ATTR_ORIG_IPV4_DST, nfct.ATTR_ORIG_COUNTER_PACKETS]
+        self.assertFalse(ct.attr_is_set_array(a))
+        ct.destroy()
+
+
+    def test_attr_unset(self):
+        ct = nfct.Conntrack()
+        ct.set_attr_u8(nfct.ATTR_ORIG_L3PROTO, 123)
+        ct.attr_unset(nfct.ATTR_ORIG_L3PROTO)
+        self.assertFalse(ct.attr_is_set(nfct.ATTR_ORIG_L3PROTO))
+        ct.destroy()
+
+
+    def test_attr_grp(self):
+        ct = nfct.Conntrack()
+        grp1 = nfct.AttrGrpIpv4(0x12345678, 0x9abcdef0)
+        ct.set_attr_grp(nfct.ATTR_GRP_ORIG_IPV4, grp1)
+        grp2 = nfct.AttrGrpIpv4(0, 0)
+        ct.get_attr_grp(nfct.ATTR_GRP_ORIG_IPV4, grp2)
+        self.assertEquals(grp2.src, grp1.src)
+        self.assertEquals(grp2.dst, grp1.dst)
+
+        grp3 = ct.get_attr_grp_as(nfct.ATTR_GRP_ORIG_IPV4, nfct.AttrGrpIpv4)
+        self.assertEquals(grp3.src, grp1.src)
+        self.assertEquals(grp3.dst, grp1.dst)
+
+        self.assertTrue(ct.attr_grp_is_set(nfct.ATTR_GRP_ORIG_IPV4))
+        ct.attr_grp_unset(nfct.ATTR_GRP_ORIG_IPV4)
+        self.assertFalse(ct.attr_grp_is_set(nfct.ATTR_GRP_ORIG_IPV4))
+
+
+    # Conntrack.snprintf(self, s, m, o, f)
+    # Conntrack.snprintf_labels(self, s, m, o, f, l)
+
+
+    def test_cmp(self):
+        ct1 = nfct.Conntrack()
+        grp = nfct.AttrGrpIpv4(0x12345678, 0x9abcdef0)
+        ct1.set_attr_grp(nfct.ATTR_GRP_ORIG_IPV4, grp)
+        ct1.set_attr_u8(nfct.ATTR_ORIG_L3PROTO, 123)
+        ct1.set_attr_u16(nfct.ATTR_ORIG_PORT_SRC, 0x1234)
+        ct1.set_attr_u32(nfct.ATTR_ORIG_IPV4_DST, 0x12345678)
+        ct1.set_attr_u64(nfct.ATTR_ID, 0xabcdef)
+
+        ct2 = nfct.Conntrack()
+        ct2.set_attr_grp(nfct.ATTR_GRP_ORIG_IPV4, grp)
+        ct2.set_attr_u8(nfct.ATTR_ORIG_L3PROTO, 123)
+        ct2.set_attr_u16(nfct.ATTR_ORIG_PORT_SRC, 0x1234)
+        ct2.set_attr_u32(nfct.ATTR_ORIG_IPV4_DST, 0x87654321)
+
+        self.assertEqual(ct1.cmp(ct2, nfct.NFCT_CMP_ALL), 0)
+        ct2.set_attr_u32(nfct.ATTR_ORIG_IPV4_DST, 0x12345678)
+        self.assertEqual(ct1.cmp(ct2, nfct.NFCT_CMP_ALL), 1)
+
+        self.assertEqual(ct1.cmp(ct2, nfct.NFCT_CMP_STRICT), 0)
+        # not literaly strict but meta
+        ct2.set_attr_u64(nfct.ATTR_ID, 0xabcdef)
+        self.assertEqual(ct1.cmp(ct2, nfct.NFCT_CMP_STRICT), 1)
+
+        ct1.destroy()
+        ct2.destroy()
+
+
+    def test_copy(self):
+        ct1 = nfct.Conntrack()
+        ct1.set_attr_u8(nfct.ATTR_ORIG_L3PROTO, 123)
+        ct1.set_attr_u16(nfct.ATTR_ORIG_PORT_SRC, 0x1234)
+        ct2 = nfct.Conntrack()
+        ct1.copy(ct2, nfct.NFCT_CP_ALL)
+        self.assertEqual(ct2.get_attr_u8(nfct.ATTR_ORIG_L3PROTO), 123)
+        self.assertEqual(ct2.get_attr_u16(nfct.ATTR_ORIG_PORT_SRC), 0x1234)
+        ct1.destroy()
+        ct2.destroy()
+
+
+    def test_copy_attr(self):
+        ct1 = nfct.Conntrack()
+        ct1.set_attr_u8(nfct.ATTR_ORIG_L3PROTO, 123)
+        ct1.set_attr_u16(nfct.ATTR_ORIG_PORT_SRC, 0x1234)
+        ct2 = nfct.Conntrack()
+        ct1.copy_attr(ct2, nfct.ATTR_ORIG_L3PROTO)
+        self.assertEqual(ct2.get_attr_u8(nfct.ATTR_ORIG_L3PROTO), 123)
+        try:
+            ct2.get_attr_u16(nfct.ATTR_ORIG_PORT_SRC)
+        except OSError as e:
+            self.assertEqual(e.errno, errno.ENODATA)
+        else:
+            self.fail("no OSError raise")
+        ct1.destroy()
+        ct2.destroy()
+
+
+    def test_parse_build(self):
+        # print("len1: %d, len2: %d" % (len(self.nlmsgbuf1), len(self.nlmsgbuf2)), file=sys.stderr)
+        ct = nfct.Conntrack()
+        nlh = netlink.Nlmsghdr(self.nlmsgbuf10)
+        ct.nlmsg_parse(nlh)
+        nlh = mnl.put_new_header(1024)
+        nlh.type = (nfnl.NFNL_SUBSYS_CTNETLINK << 8) | nfnlct.IPCTNL_MSG_CT_DELETE
+        nlh.flags = 0
+        nlh.seq = 0
+        nlh.portid = 0
+        nfh = nlh.put_extra_header_as(nfnl.Nfgenmsg)
+        nfh.family = socket.AF_INET
+        nfh.version = nfnl.NFNETLINK_V0
+        nfh.res_id = 0
+
+        ct.nlmsg_build(nlh)
+        self.assertEqual(nlh.marshal_binary(), self.nlmsgbuf11)
+
+
 
         # Conntrack.nlmsg_build(self, nlh)
         # Conntrack.nlmsg_parse(self, nlh)

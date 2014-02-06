@@ -393,7 +393,7 @@ class FilterLogic(Enum):
 NFCT_FILTER_LOGIC_POSITIVE = 0
 NFCT_FILTER_LOGIC_NEGATIVE = 1
 NFCT_FILTER_LOGIC_MAX = 2
-    
+
 
 ## dump filtering
 class FilterDumpMark(Structure):
@@ -436,4 +436,3 @@ ATTR_EXP_NAT_TUPLE = 8
 ATTR_EXP_NAT_DIR = 9
 ATTR_EXP_FN = 10
 ATTR_EXP_MAX = 11
-

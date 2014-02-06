@@ -44,7 +44,6 @@ class Conntrack(object):
     def attr_grp_unset(self, a):	conntrack_attr_grp_unset(self._ct, a)
     def snprintf(self, s, m, o, f):	return conntrack_snprintf(s, self._ct, m, o, f)
     def snprintf_labels(self, s, m, o, f, l): return conntrack_snprinf_labels(s, self._ct, m, o, f, l)
-    def compare(self, ct2):		return conntrack_compare(self._ct, ct2._ct)
     def cmp(self, ct2, f):		return conntrack_cmp(self._ct, ct2._ct, f)
     def copy(self, ct2, f):		conntrack_copy(ct2._ct, self._ct, f)
     def copy_attr(self, ct2, t):	conntrack_copy_attr(ct2._ct, self._ct, t)
