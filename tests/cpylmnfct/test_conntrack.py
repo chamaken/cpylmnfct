@@ -2,8 +2,8 @@
 
 from __future__ import print_function
 
-import sys, unittest
-import struct, socket, ipaddr, ctypes, errno
+import sys, os, unittest
+import socket, ctypes, errno
 
 import cpylmnl as mnl
 import cpylmnl.linux.netlinkh as netlink
@@ -452,32 +452,6 @@ class TestSuite(unittest.TestCase):
                 ])
 
 
-    def _test_conntrack_nlmsg_parse(self):
-        nlh1 = netlink.Nlmsghdr(self.nlmsgbuf1)
-        ct1 = nfct.conntrack_new()
-        nfct.conntrack_nlmsg_parse(nlh1, ct1)
-        orig_ipv4_src = socket.inet_ntoa(struct.pack("i", nfct.conntrack_get_attr_u32(ct1, nfct.ATTR_ORIG_IPV4_SRC)))
-        orig_ipv4_dst = socket.inet_ntoa(struct.pack("i", nfct.conntrack_get_attr_u32(ct1, nfct.ATTR_ORIG_IPV4_DST)))
-        orig_port_src = nfct.conntrack_get_attr_u16(ct1, nfct.ATTR_ORIG_PORT_SRC)
-        orig_port_dst = nfct.conntrack_get_attr_u16(ct1, nfct.ATTR_ORIG_PORT_DST)
-        orig_proto = nfct.conntrack_get_attr_u8(ct1, nfct.ATTR_ORIG_L4PROTO)
-        print("%s:%04x > (%d) > %s:%04x" % (orig_ipv4_src, orig_port_src, orig_proto,
-                                            orig_ipv4_dst, orig_port_dst), file=sys.stderr)
-
-        repl_ipv4_src = socket.inet_ntoa(struct.pack("i", nfct.conntrack_get_attr_u32(ct1, nfct.ATTR_REPL_IPV4_SRC)))
-        repl_ipv4_dst = socket.inet_ntoa(struct.pack("i", nfct.conntrack_get_attr_u32(ct1, nfct.ATTR_REPL_IPV4_DST)))
-        repl_port_src = nfct.conntrack_get_attr_u16(ct1, nfct.ATTR_REPL_PORT_SRC)
-        repl_port_dst = nfct.conntrack_get_attr_u16(ct1, nfct.ATTR_REPL_PORT_DST)
-        repl_proto = nfct.conntrack_get_attr_u8(ct1, nfct.ATTR_REPL_L4PROTO)
-        print("%s:%04x > (%d) < %s:%04x" % (repl_ipv4_src, repl_port_src, repl_proto,
-                                            repl_ipv4_dst, repl_port_dst), file=sys.stderr)
-
-
-        nlh2 = netlink.Nlmsghdr(self.nlmsgbuf2)
-        ct2 = nfct.conntrack_new()
-        mnl.nlmsg_fprint(self.nlmsgbuf2, nfnl.Nfgenmsg.sizeof(), out=sys.stderr)
-
-
     # almost just calling them
     def test_conntrack(self):
         try:
@@ -485,12 +459,11 @@ class TestSuite(unittest.TestCase):
             ct.destroy()
         except Exception as e:
             self.fail("could not create or destroy nf_conntrack: %s" % e)
-
         try:
             ct = nfct.Conntrack()
             del ct
         except Exception as e:
-            self.fail("could not create or destroy nf_conntrack: %s" % e)
+            self.fail("could not create or del nf_conntrack: %s" % e)
 
     def test_clone(self):
         ct = nfct.Conntrack()
@@ -666,7 +639,6 @@ class TestSuite(unittest.TestCase):
 
 
     def test_parse_build(self):
-        # print("len1: %d, len2: %d" % (len(self.nlmsgbuf1), len(self.nlmsgbuf2)), file=sys.stderr)
         ct = nfct.Conntrack()
         nlh = netlink.Nlmsghdr(self.nlmsgbuf10)
         ct.nlmsg_parse(nlh)
@@ -683,62 +655,211 @@ class TestSuite(unittest.TestCase):
         ct.nlmsg_build(nlh)
         self.assertEqual(nlh.marshal_binary(), self.nlmsgbuf11)
 
+    # Conntrack.payload_parse(self, p, l3)
 
 
-        # Conntrack.nlmsg_build(self, nlh)
-        # Conntrack.nlmsg_parse(self, nlh)
-        # Conntrack.payload_parse(self, p, l3)
+    def test_filter(self):
+        try:
+            fl = nfct.Filter()
+            fl.destroy()
+        except Exceptio as e:
+            self.fail("could not create or destroy filter: %s" % e)
+
+        try:
+            fl = nfct.Filter()
+            del fl
+        except Exception as e:
+            self.fail("could not create or del filter: %s" % e)
 
 
-        # Filter.__init__(self, filter=None)
-	# Filter.destroy(self)
-        # Filter.__del__(self)
-        # Filter.add_attr(self, a, v)
-        # Filter.add_attr_u32(self, a, v)
-        # Filter.set_logic(self, a, l)
-        # Filter.attach(self, fd)
-        # Filter.detatch(fd)
+    def test_filter_add_attr(self):
+        fl = nfct.Filter()
+        src4 = nfct.FilterIpv4(addr=0x12345678, mask=0xffff0000)
+        try:
+            fl.add_attr(nfct.NFCT_FILTER_SRC_IPV4, src4)
+        except Exception as e:
+            raise
+            self.fail("could not add attr to filter: %s" % e)
+        try:
+            fl.add_attr(nfct.NFCT_FILTER_MAX, src4)
+        except OSError as e:
+            self.assertEqual(e.errno, errno.EINVAL)
+        else:
+            self.fail("not raise OSError")
 
 
-	# FilterDump.__init__(self, filter_dump=None)
-	# FilterDump.destroy(self)
-	# FilterDump.__del__(self)
-	# FilterDump.set_attr(self, a, v)
-	# FilterDump.set_attr_u8(self, a, v)
+    def test_filter_add_attr_u32(self):
+        fl = nfct.Filter()
+        try:
+            fl.add_attr_u32(nfct.NFCT_FILTER_L4PROTO, 1)
+        except Exception as e:
+            self.fail("could not add attr to filter: %s" % e)
+        try:
+            fl.add_attr_u32(nfct.NFCT_FILTER_MAX, 1)
+        except OSError as e:
+            self.assertEqual(e.errno, errno.EINVAL)
+        else:
+            self.fail("not raise OSError")
 
 
-	# Labelmap.__init__(self, labelmap=None)
-	# Labelmap.destroy(self)
-	# Labelmap.get_name(self, bit)
-	# Labelmap.get_bit(self, name)
+    def test_filter_set_logic(self):
+        fl = nfct.Filter()
+        try:
+            fl.set_logic(nfct.NFCT_FILTER_SRC_IPV4, nfct.NFCT_FILTER_LOGIC_NEGATIVE)
+        except Exception as e:
+            raise
+            self.fail("could not set logic to filter: %s" % e)
+        try:
+            fl.set_logic(nfct.NFCT_FILTER_DST_IPV4, nfct.NFCT_FILTER_LOGIC_MAX)
+        except OSError as e:
+            self.assertEqual(e.errno, errno.EINVAL)
+        else:
+            self.fail("not raise OSError")
+        fl.destroy()
 
 
-	# Bitmask.__init__(self, high, bitmask=None)
-	# Bitmask.destroy(self)
-	# Bitmask.__del__(self)
-	# Bitmask.clone(self)
-	# Bitmask.set_bit(self, bit)
-	# Bitmask.test_bit(self, bit)
-	# Bitmask.unset_bit(self, bit)
-	# Bitmask.maxbit(self)
+    def test_filter_attach(self):
+        fl = nfct.Filter()
+        with mnl.Socket(netlink.NETLINK_NETFILTER) as nl:
+            try:
+                fl.attach(nl.get_fd())
+            except Exception as e:
+                self.fail("could not attach filter to fd: %s" % e)
+        fl.destroy()
 
 
-	# Expect.__init__(self, exp=None)
-	# Expect.destroy(self)
-	# Expect.__del__(self)
-	# Expect.clone(self)
-	# Expect.cmp(self, e2, f)
-	# Expect.set_attr(self, a, v)
-	# Expect.set_attr_u8(self, a, v)
-	# Expect.set_attr_u16(self, a, v)
-	# Expect.set_attr_u32(self, a, v)
-	# Expect.get_attr(self, a)
-	# Expect.get_attr_as(self, a, c)
-	# Expect.get_attr_u8(self, a)
-	# Expect.get_attr_u16(self, a)
-	# Expect.get_attr_u32(self, a)
-	# Expect.attr_is_set(self, a)
-	# Expect.attr_unset(self, a)
-	# Expect.snprintf(self, s, m, o, f)
-	# Expect.nlmsg_build(self, nlh)
-	# Expect.nlmsg_parse(self, nlh)
+    def test_filter_detach(self):
+        with mnl.Socket(netlink.NETLINK_NETFILTER) as nl:
+            try:
+                nfct.Filter.detach(nl.get_fd())
+            except OSError as e:
+                self.assertEqual(e.errno, errno.ENOENT)
+            else:
+                self.fail("not raise OSError")
+            fl = nfct.Filter()
+            fl.attach(nl.get_fd())
+            try:
+                # nfct.Filter.detach(nl.get_fd())
+                fl.detach(nl.get_fd())
+            except Exception as e:
+                self.fail("could not detatch filter to fd: %s" % e)
+            fl.destroy()
+
+
+    def test_filter_dump(self):
+        try:
+            fld = nfct.FilterDump()
+            fld.destroy()
+        except Exception as e:
+            self.fail("could not create or destroy filter dump: %s" % e)
+        try:
+            fld = nfct.FilterDump()
+            del fld
+        except Exception as e:
+            self.fail("could not create or del filter dump: %s" % e)
+
+
+    def test_filter_dump_set_attr(self):
+        fld = nfct.FilterDump()
+        mark = nfct.FilterDumpMark(val=0x12345678, mask=0xffffffff)
+        try:
+            fld.set_attr(nfct.NFCT_FILTER_DUMP_MARK, mark)
+        except Exception as e:
+            self.fail("could not set attr to filter dump: %s" % e)
+        try:
+            fld.set_attr(nfct.NFCT_FILTER_DUMP_MAX, mark)
+        except OSError as e:
+            self.assertEqual(e.errno, errno.EINVAL)
+        else:
+            self.fail("not raise OSError")
+        fld.destroy()
+
+
+    def test_filter_dump_set_attr_u8(self):
+        fld = nfct.FilterDump()
+        try:
+            fld.set_attr_u8(nfct.NFCT_FILTER_DUMP_L3NUM, 1)
+        except Exception as e:
+            self.fail("could not set u8 attr to filter dump: %s" % e)
+        try:
+            fld.set_attr_u8(nfct.NFCT_FILTER_DUMP_MAX, 1)
+        except OSError as e:
+            self.assertEqual(e.errno, errno.EINVAL)
+        else:
+            self.fail("not raise OSError")
+        fld.destroy()
+
+
+    def test_labelmap(self):
+        mapfname = os.path.join(os.path.dirname(__file__), "connlabel.conf")
+        try:
+            lm = nfct.Labelmap(mapfname)
+            lm.destroy()
+        except Exception as e:
+            raise
+            self.fail("could not create or destroy filter dump: %s" % e)
+        try:
+            lm = nfct.Labelmap(mapfname)
+            del lm
+        except Exception as e:
+            self.fail("could not create or del filter dump: %s" % e)
+
+
+    def test_labelmap_get_name(self):
+        mapfname = os.path.join(os.path.dirname(__file__), "connlabel.conf")
+        lm = nfct.Labelmap(mapfname)
+        self.assertEquals(lm.get_name(3), "ppp-out")
+        self.assertEquals(lm.get_name(11), None)
+        lm.destroy()
+
+
+    def test_label_get_bit(self):
+        mapfname = os.path.join(os.path.dirname(__file__), "connlabel.conf")
+        lm = nfct.Labelmap(mapfname)
+        self.assertEquals(lm.get_bit("ppp-out"), 3)
+        self.assertEquals(lm.get_bit("abcdefg"), -1)
+        lm.destroy()
+
+
+    def test_bitmask(self):
+        try:
+            bm = nfct.Bitmask(192)
+            bm.destroy()
+        except Exception as e:
+            self.fail("could not create or destroy filter dump: %s" % e)
+        try:
+            bm = nfct.Bitmask(192)
+            del bm
+        except Exception as e:
+            self.fail("could not create or del filter dump: %s" % e)
+
+
+    def test_bitmask_clone(self):
+        bm = nfct.Bitmask(192)
+        bm.set_bit(1)
+        bm.set_bit(11)
+        bm.set_bit(111)
+        clone = bm.clone()
+        self.assertTrue(clone.test_bit(1))
+        self.assertTrue(clone.test_bit(11))
+        self.assertTrue(clone.test_bit(111))
+        self.assertFalse(clone.test_bit(0))
+        self.assertFalse(clone.test_bit(10))
+        self.assertFalse(clone.test_bit(100))
+        bm.destroy()
+        
+
+    def test_bitmask_bit(self):
+        bm = nfct.Bitmask(8)
+        bm.set_bit(7)
+        self.assertTrue(bm.test_bit(7))
+        self.assertFalse(bm.test_bit(6))
+        bm.unset_bit(7)
+        self.assertFalse(bm.test_bit(7))
+        bm.destroy()
+
+
+    def test_bitmask_maxbit(self):
+        bm = nfct.Bitmask(192)
+        self.assertEqual(bm.maxbit(), 192 + 32 - 1)
+        bm.destroy()

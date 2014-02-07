@@ -6,7 +6,9 @@ import ctypes, errno
 from cpylmnl.linux import netlinkh as netlink
 
 from . import cproto
-from .libnetfilter_conntrackh import ATTR_MAX, ATTR_GRP_MAX, NFCT_FILTER_MAX, NFCT_FILTER_DUMP_MAX
+from .libnetfilter_conntrackh import \
+    ATTR_MAX, ATTR_GRP_MAX, NFCT_FILTER_MAX, NFCT_FILTER_DUMP_MAX, NFCT_FILTER_LOGIC_MAX, \
+    NFCT_FILTER_DUMP_MAX
 
 ## nfct_new - allocate a new conntrack
 def conntrack_new():
@@ -205,15 +207,16 @@ def filter_add_attr(f, attr_type, value):
     except TypeError:
         raise OSError(errno.EINVAL, "value must be ctypes type")
     if attr_type >= NFCT_FILTER_MAX: raise OSError(errno.EINVAL, "not a valid filter attr type")
-    cproto.nfct_filter_add_attr(ct, attr_type, value)
+    cproto.c_nfct_filter_add_attr(f, attr_type, ctypes.byref(value))
 
 ## nfct_filter_add_attr_u32 - add an u32 filter attribute of the filter object
 def filter_add_attr_u32(f, attr_type, value):
     if attr_type >= NFCT_FILTER_MAX: raise OSError(errno.EINVAL, "not a valid filter attr type")
-    cproto.c_nfct_filter_add_attr_u32(ct, attr_type, value)
+    cproto.c_nfct_filter_add_attr_u32(f, attr_type, value)
 
 ## nfct_filter_set_logic - set the filter logic for an attribute type
 def filter_set_logic(f, attr_type, logic):
+    if logic >= NFCT_FILTER_LOGIC_MAX: raise OSError(errno.EINVAL, "not a valid filter logic")
     ret = cproto.c_nfct_filter_set_logic(f, attr_type, logic)
     if ret == -1: raise cproto.os_error()
 
@@ -231,7 +234,7 @@ def filter_detach(fd):
 ### dump filtering
 ## nfct_filter_dump_create - create a dump filter
 def filter_dump_create():
-    ret = cproto.c_nfct_filter_dump()
+    ret = cproto.c_nfct_filter_dump_create()
     if ret is None: raise cproto.os_error()
     return ret
 
@@ -244,19 +247,19 @@ def filter_dump_set_attr(f, attr_type, value):
         ctypes.sizeof(value)
     except TypeError:
         raise OSError(errno.EINVAL, "value must be ctypes type")
-    if attr_type >= ATTR_FILTER_DUMP_MAX: raise OSError(errno.EINVAL, "not a valid filter dump attr type")
-    cproto.c_nfct_filter_dump_set_attr(ct, attr_type, value)
+    if attr_type >= NFCT_FILTER_DUMP_MAX: raise OSError(errno.EINVAL, "not a valid filter dump attr type")
+    cproto.c_nfct_filter_dump_set_attr(f, attr_type, ctypes.byref(value))
 
 
 ## nfct_filter_dump_set_attr_u8 - set u8 dump filter attribute
 def filter_dump_set_attr_u8(f, attr_type, value):
-    if attr_type >= ATTR_FILTER_DUMP_MAX: raise OSError(errno.EINVAL, "not a valid filter dump attr type")
+    if attr_type >= NFCT_FILTER_DUMP_MAX: raise OSError(errno.EINVAL, "not a valid filter dump attr type")
     cproto.c_nfct_filter_dump_set_attr_u8(f, attr_type, value)
 
 ### Conntrack labels
 ## nfct_labelmap_get_name - get name of the label bit
 def labelmap_get_name(m, bit):
-    ret = cproto.c_nfct_labelmap_get_name
+    ret = cproto.c_nfct_labelmap_get_name(m, bit)
     if ret is None: return None
     return ctypes.string_at(ret)
 
@@ -265,8 +268,8 @@ def labelmap_get_bit(m, name):
     return cproto.c_nfct_labelmap_get_bit(m, ctypes.create_string_buffer(name))
 
 ## nfct_labelmap_new - create a new label map
-def labelmap_new():
-    ret = cproto.c_nfct_labelmap_new()
+def labelmap_new(mapfile):
+    ret = cproto.c_nfct_labelmap_new(ctypes.create_string_buffer(mapfile))
     if ret is None: raise cproto.os_error()
     return ret
 
