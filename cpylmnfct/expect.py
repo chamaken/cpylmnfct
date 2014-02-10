@@ -22,7 +22,7 @@ expect_destroy = cproto.c_nfexp_destroy
 
 ## nfexp_clone - clone a expectation object
 def expect_clone(exp):
-    ret = cproto.c_nfexp_clone()
+    ret = cproto.c_nfexp_clone(exp)
     if ret is None: raise cproto.os_error()
     return ret
 
@@ -60,14 +60,14 @@ def expect_set_attr_u32(exp, attr_type, value):
 
 ## nfexp_get_attr - get an expect attribute
 def expect_get_attr(exp, attr_type):
-    ret = cproto.c_nfexp_get_attr(exp, option)
+    ret = cproto.c_nfexp_get_attr(exp, attr_type)
     if ret is None: raise cproto.os_error()
     return ret
 
-def expect_get_attr_as(exp, attr_type):
-    ret = cproto.c_expect_get_attr(exp, option)
+def expect_get_attr_as(exp, attr_type, cls):
+    ret = cproto.c_nfexp_get_attr(exp, attr_type)
     if ret is None: raise cproto.os_error()
-    return ctypes.cast(ret, POINTER(cls)).contents
+    return ctypes.cast(ret, ctypes.POINTER(cls)).contents
 
 ## nfexp_get_attr_u8 - get attribute of unsigned 8-bits long
 def expect_get_attr_u8(exp, attr_type):
