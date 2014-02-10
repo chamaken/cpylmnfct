@@ -793,13 +793,13 @@ class TestSuite(unittest.TestCase):
     def test_labelmap(self):
         mapfname = os.path.join(os.path.dirname(__file__), "connlabel.conf")
         try:
-            lm = nfct.Labelmap(mapfname)
+            lm = nfct.Labelmap(bytes(mapfname.encode("utf-8")))
             lm.destroy()
         except Exception as e:
             raise
             self.fail("could not create or destroy filter dump: %s" % e)
         try:
-            lm = nfct.Labelmap(mapfname)
+            lm = nfct.Labelmap(bytes(mapfname.encode("utf-8")))
             del lm
         except Exception as e:
             self.fail("could not create or del filter dump: %s" % e)
@@ -807,17 +807,17 @@ class TestSuite(unittest.TestCase):
 
     def test_labelmap_get_name(self):
         mapfname = os.path.join(os.path.dirname(__file__), "connlabel.conf")
-        lm = nfct.Labelmap(mapfname)
-        self.assertEquals(lm.get_name(3), "ppp-out")
+        lm = nfct.Labelmap(bytes(mapfname.encode("utf-8")))
+        self.assertEquals(lm.get_name(3), b"ppp-out")
         self.assertEquals(lm.get_name(11), None)
         lm.destroy()
 
 
     def test_label_get_bit(self):
         mapfname = os.path.join(os.path.dirname(__file__), "connlabel.conf")
-        lm = nfct.Labelmap(mapfname)
-        self.assertEquals(lm.get_bit("ppp-out"), 3)
-        self.assertEquals(lm.get_bit("abcdefg"), -1)
+        lm = nfct.Labelmap(bytes(mapfname.encode("utf-8")))
+        self.assertEquals(lm.get_bit(b"ppp-out"), 3)
+        self.assertEquals(lm.get_bit(b"abcdefg"), -1)
         lm.destroy()
 
 
