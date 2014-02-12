@@ -264,12 +264,11 @@ def labelmap_get_name(m, bit):
     return ctypes.string_at(ret)
 
 ## nfct_labelmap_get_bit - get bit associated with the name
-def labelmap_get_bit(m, name):
-    return cproto.c_nfct_labelmap_get_bit(m, ctypes.create_string_buffer(name))
+labelmap_get_bit = cproto.c_nfct_labelmap_get_bit
 
 ## nfct_labelmap_new - create a new label map
 def labelmap_new(mapfile):
-    ret = cproto.c_nfct_labelmap_new(ctypes.create_string_buffer(mapfile))
+    ret = cproto.c_nfct_labelmap_new(mapfile)
     if ret is None: raise cproto.os_error()
     return ret
 
