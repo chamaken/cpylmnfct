@@ -1,7 +1,7 @@
 cpylmnfct
 =========
 
-python wrapper of libnetfilter_conntrack using ctypes, under heavy development
+Python wrapper of libnetfilter_conntrack using ctypes, under heavy development
 
 sample
 ------
@@ -41,106 +41,106 @@ comparison
 | nfct_close				| (Not implemented)		|				|
 | nfct_fd				| (Not implemented)		|				|
 | nfct_nfnlh				| (Not implemented)		|				|
-| nfct_new				| conntrack_new			|				|
-| nfct_destroy				| conntrack_destroy		|				|
-| nfct_clone				| conntrack_clone		|				|
+| nfct_new				| Conntrack.new			|				|
+| nfct_destroy				| Conntrack.destroy		|				|
+| nfct_clone				| Conntrack.clone		|				|
 | nfct_sizeof				| (Not implemented)		|				|
 | nfct_maxsize				| (Not implemented)		|				|
-| nfct_setobjopt			| conntrack_setobjopt		|				|
-| nfct_getobjopt			| conntrack_getobjopt		|				|
+| nfct_setobjopt			| Conntrack.setobjopt		|				|
+| nfct_getobjopt			| Conntrack.getobjopt		|				|
 | nfct_callback_register		| (Not implemented)		|				|
 | nfct_callback_unregister		| (Not implemented)		|				|
 | nfct_callback_register2		| (Not implemented)		|				|
 | nfct_callback_unregister2		| (Not implemented)		|				|
-| nfct_bitmask_new			| bitmask_New			|				|
-| nfct_bitmask_clone			| bitmask_clone			|				|
-| nfct_bitmask_maxbit			| bitmask_maxbit		|				|
-| nfct_bitmask_test_bit			| bitmask_test_bit		|				|
-| nfct_bitmask_unset_bit		| bitmask_unset_bit		|				|
-| nfct_bitmask_destroy			| bitmask_destroy		|				|
-| nfct_labelmap_new			| labelmap_new			|				|
-| nfct_labelmap_destroy			| labelmap_destroy		|				|
-| nfct_labelmap_get_name		| labelmap_get_name		|				|
-| nfct_labelmap_get_bit			| labelmap_get_bit		|				|
-| nfct_set_attr				| conntrack_set_attr		| value must be a _CData	|
-| nfct_set_attr_u8			| conntrack_set_attr_u8		|				|
-| nfct_set_attr_u16			| conntrack_set_attr_u16	|				|
-| nfct_set_attr_u32			| conntrack_set_attr_u32	|				|
-| nfct_set_attr_u64			| conntrack_set_attr_u64	|				|
-| nfct_set_attr_l			| conntrack_set_attr_l		|				|
-| nfct_get_attr				| conntrack_get_attr		|				|
-| (add)					| conntrack_get_attr_as		| casting c_void_p		|
-| nfct_get_attr_u8			| conntrack_get_attr_u8		|				|
-| nfct_get_attr_u16			| conntrack_get_attr_u16	|				|
-| nfct_get_attr_u32			| conntrack_get_attr_u32	|				|
-| nfct_get_attr_u64			| conntrack_get_attr_u64	|				|
-| nfct_attr_is_set			| conntrack_attr_is_set		| return boolean		|
-| nfct_attr_is_set_array		| conntrack_attr_is_set_array	| return boolean		|
-| nfct_attr_unset			| conntrack_attr_unset		|				|
-| nfct_set_attr_grp			| conntrack_set_attr_grp	|				|
-| nfct_attr_get_attr_grp		| conntrack_attr_get_attr_grp	|				|
-| (add)					| conntrack_attr_get_attr_grp_as|				|
-| nfct_attr_grp_is_set			| conntrack_attr_grp_is_set	|				|
-| nfct_attr_grp_unset			| conntrack_attr_grp_unset	|				|
-| nfct_snprintf				| conntrack_snprintf		|				|
-| nfct_snprintf_labels			| conntrack_snprintf_labels	|				|
-| nfct_compare				| conntrack_compare		|				|
-| nfct_cmp				| conntrack_cmp			|				|
+| nfct_Bitmask.new			| Bitmask.New			|				|
+| nfct_Bitmask.clone			| Bitmask.clone			|				|
+| nfct_Bitmask.maxbit			| Bitmask.maxbit		|				|
+| nfct_Bitmask.test_bit			| Bitmask.test_bit		|				|
+| nfct_Bitmask.unset_bit		| Bitmask.unset_bit		|				|
+| nfct_Bitmask.destroy			| Bitmask.destroy		|				|
+| nfct_Labelmap.new			| Labelmap.new			|				|
+| nfct_Labelmap.destroy			| Labelmap.destroy		|				|
+| nfct_Labelmap.get_name		| Labelmap.get_name		|				|
+| nfct_Labelmap.get_bit			| Labelmap.get_bit		|				|
+| nfct_set_attr				| Conntrack.set_attr		| value must be a _CData	|
+| nfct_set_attr_u8			| Conntrack.set_attr_u8		|				|
+| nfct_set_attr_u16			| Conntrack.set_attr_u16	|				|
+| nfct_set_attr_u32			| Conntrack.set_attr_u32	|				|
+| nfct_set_attr_u64			| Conntrack.set_attr_u64	|				|
+| nfct_set_attr_l			| Conntrack.set_attr_l		|				|
+| nfct_get_attr				| Conntrack.get_attr		|				|
+| (add)					| Conntrack.get_attr_as		| casting c_void_p		|
+| nfct_get_attr_u8			| Conntrack.get_attr_u8		|				|
+| nfct_get_attr_u16			| Conntrack.get_attr_u16	|				|
+| nfct_get_attr_u32			| Conntrack.get_attr_u32	|				|
+| nfct_get_attr_u64			| Conntrack.get_attr_u64	|				|
+| nfct_attr_is_set			| Conntrack.attr_is_set		| return boolean		|
+| nfct_attr_is_set_array		| Conntrack.attr_is_set_array	| return boolean		|
+| nfct_attr_unset			| Conntrack.attr_unset		|				|
+| nfct_set_attr_grp			| Conntrack.set_attr_grp	|				|
+| nfct_attr_get_attr_grp		| Conntrack.attr_get_attr_grp	|				|
+| (add)					| Conntrack.attr_get_attr_grp_as|				|
+| nfct_attr_grp_is_set			| Conntrack.attr_grp_is_set	|				|
+| nfct_attr_grp_unset			| Conntrack.attr_grp_unset	|				|
+| nfct_snprintf				| Conntrack.snprintf		|				|
+| nfct_snprintf_labels			| Conntrack.snprintf_labels	|				|
+| nfct_compare				| Conntrack.compare		|				|
+| nfct_cmp				| Conntrack.cmp			|				|
 | nfct_query				| (Not implemented)		|				|
 | nfct_send				| (Not implemented)		|				|
 | nfct_catch				| (Not implemented)		|				|
-| nfct_copy				| conntrack_copy		|				|
-| nfct_copy_attr			| conntrack_copy_attr		|				|
+| nfct_copy				| Conntrack.copy		|				|
+| nfct_copy_attr			| Conntrack.copy_attr		|				|
 | ------------------------------------- | ----------------------------- | ----------------------------- | 
-| nfct_filter_create			| filter_create			|				|
-| nfct_filter_destroy			| filter_destroy		|				|
-| nfct_filter_add_attr			| filter_add_attr		|				|
-| nfct_filter_add_attr_u32		| filter_add_attr_u32		|				|
-| nfct_filter_set_logic			| filter_set_logic		|				|
-| nfct_filter_attach			| filter_attach			|				|
-| nfct_filter_detach			| filter_detach			|				|
+| nfct_Filter.create			| Filter.create			|				|
+| nfct_Filter.destroy			| Filter.destroy		|				|
+| nfct_Filter.add_attr			| Filter.add_attr		|				|
+| nfct_Filter.add_attr_u32		| Filter.add_attr_u32		|				|
+| nfct_Filter.set_logic			| Filter.set_logic		|				|
+| nfct_Filter.attach			| Filter.attach			|				|
+| nfct_Filter.detach			| Filter.detach			|				|
 | ------------------------------------- | ----------------------------- | ----------------------------- | 
-| nfct_filter_dump_create		| filter_dump_create		|				|
-| nfct_filter_dump_destroy		| filter_dump_destroy		|				|
-| nfct_filter_dump_set_attr		| filter_dump_set_attr		|				|
-| nfct_filter_dump_set_attr_u8		| filter_dump_set_attr_U8	|				|
+| nfct_FilterDump.create		| FilterDump.create		|				|
+| nfct_FilterDump.destroy		| FilterDump.destroy		|				|
+| nfct_FilterDump.set_attr		| FilterDump.set_attr		|				|
+| nfct_FilterDump.set_attr_u8		| FilterDump.set_attr_U8	|				|
 | ------------------------------------- | ----------------------------- | ----------------------------- | 
 | nfct_build_conntrack			| (Not implemented)		|				|
 | nfct_parse_conntrack			| (Not implemented)		|				|
 | nfct_build_query			| (Not implemented)		|				|
-| nfct_nlmsg_build			| conntrack_nlmsg_build		|				|
-| nfct_nlmsg_parse			| conntrack_nlmsg_parse		|				|
-| nfct_payload_parse			| conntrack_payload_parse	|				|
-| (add)					| conntrack_PayloadParseBytes	|				|
+| nfct_nlmsg_build			| Conntrack.nlmsg_build		|				|
+| nfct_nlmsg_parse			| Conntrack.nlmsg_parse		|				|
+| nfct_payload_parse			| Conntrack.payload_parse	|				|
+| (add)					| Conntrack.PayloadParseBytes	|				|
 | ------------------------------------- | ----------------------------- | ----------------------------- | 
-| nfexp_new				| expect_new			|				|
-| nfexp_destroy				| expect_destroy		|				|
-| nfexp_clone				| expect_clone			|				|
+| nfexp_new				| Expect.new			|				|
+| nfexp_destroy				| Expect.destroy		|				|
+| nfexp_clone				| Expect.clone			|				|
 | nfexp_sizeof				| (Not implemented)		|				|
 | nfexp_maxsize				| (Not implemented)		|				|
 | nfexp_callback_register		| (Not implemented)		|				|
 | nfexp_callback_unregister		| (Not implemented)		|				|
 | nfexp_callback_register2		| (Not implemented)		|				|
 | nfexp_callback_unregister2		| (Not implemented)		|				|
-| nfexp_set_attr			| expect_set_attr		|				|
-| nfexp_set_attr_u8			| expect_set_attr_u8		|				|
-| nfexp_set_attr_u16			| expect_set_attr_u16		|				|
-| nfexp_set_attr_u32			| expect_set_attr_u32		|				|
-| nfexp_get_attr			| expect_get_attr		|				|
-| (add)					| expect_get_attr_as		|				|
-| nfexp_get_attr_u8			| expect_get_attr_u8		|				|
-| nfexp_get_attr_u16			| expect_get_attr_u16		|				|
-| nfexp_get_attr_u32			| expect_get_attr_u32		|				|
-| nfexp_attr_is_set			| expect_attr_is_set		|				|
-| nfexp_attr_unset			| expect_attr_unset		|				|
+| nfexp_set_attr			| Expect.set_attr		|				|
+| nfexp_set_attr_u8			| Expect.set_attr_u8		|				|
+| nfexp_set_attr_u16			| Expect.set_attr_u16		|				|
+| nfexp_set_attr_u32			| Expect.set_attr_u32		|				|
+| nfexp_get_attr			| Expect.get_attr		|				|
+| (add)					| Expect.get_attr_as		|				|
+| nfexp_get_attr_u8			| Expect.get_attr_u8		|				|
+| nfexp_get_attr_u16			| Expect.get_attr_u16		|				|
+| nfexp_get_attr_u32			| Expect.get_attr_u32		|				|
+| nfexp_attr_is_set			| Expect.attr_is_set		|				|
+| nfexp_attr_unset			| Expect.attr_unset		|				|
 | nfexp_query				| (Not implemented)		|				|
-| nfexp_snprintf			| expect_snprintf		|				|
-| nfexp_cmp				| expect_cmp			|				|
+| nfexp_snprintf			| Expect.snprintf		|				|
+| nfexp_cmp				| Expect.cmp			|				|
 | nfexp_send				| (Not implemented)		|				|
 | nfexp_catch				| (Not implemented)		|				|
 | nfexp_build_expect			| (Not implemented)		|				|
 | nfexp_parse_expect			| (Not implemented)		|				|
 | nfexp_build_query			| (Not implemented)		|				|
-| nfexp_nlmsg_build			| expect_nlmsg_build		|				|
-| nfexp_nlmsg_parse			| expect_nlmsg_parse		|				|
+| nfexp_nlmsg_build			| Expect.nlmsg_build		|				|
+| nfexp_nlmsg_parse			| Expect.nlmsg_parse		|				|
 | ------------------------------------- | ----------------------------- | ----------------------------- | 
