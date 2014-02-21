@@ -824,11 +824,6 @@ class TestSuite(unittest.TestCase):
     def test_bitmask(self):
         try:
             bm = nfct.Bitmask(192)
-            bm.destroy()
-        except Exception as e:
-            self.fail("could not create or destroy filter dump: %s" % e)
-        try:
-            bm = nfct.Bitmask(192)
             del bm
         except Exception as e:
             self.fail("could not create or del filter dump: %s" % e)
@@ -846,8 +841,9 @@ class TestSuite(unittest.TestCase):
         self.assertFalse(clone.test_bit(0))
         self.assertFalse(clone.test_bit(10))
         self.assertFalse(clone.test_bit(100))
-        bm.destroy()
-        
+        del clone
+        del bm
+
 
     def test_bitmask_bit(self):
         bm = nfct.Bitmask(8)
@@ -856,10 +852,10 @@ class TestSuite(unittest.TestCase):
         self.assertFalse(bm.test_bit(6))
         bm.unset_bit(7)
         self.assertFalse(bm.test_bit(7))
-        bm.destroy()
+        del bm
 
 
     def test_bitmask_maxbit(self):
         bm = nfct.Bitmask(192)
         self.assertEqual(bm.maxbit(), 192 + 32 - 1)
-        bm.destroy()
+        del bm
