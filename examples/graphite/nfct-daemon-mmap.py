@@ -28,6 +28,7 @@ nl_socket = None
 sending_nlmsghdr = None
 sending_queue = multiprocessing.Queue(QUEUE_SIZE)
 dumping = False
+secs = 60
 
 
 class Tuple(object):
@@ -229,7 +230,8 @@ def alarm_handler(signum, frame):
     for k, v in nstats.iteritems():
         if v.deleting:  deleting_keys.append(k)
         if v.pkts == 0: continue
-        listOfMetricTuples.append((str(k), (now, v.bytes)))
+        # to bit ber sec
+        listOfMetricTuples.append((str(k), (now, v.bytes * 8 / secs)))
         v.pkts = 0
         v.bytes = 0
     for k in deleting_keys:
@@ -311,11 +313,10 @@ def mnl_socket_poll(nl):
 def main():
     global nl_socket
     global sending_queue
+    global secs
 
-    if len(sys.argv) != 2:
-        print("Usage: %s <poll-secs>" % sys.argv[0], file=sys.stderr)
-        sys.exit(-1)
-    secs = int(sys.argv[1])
+    if len(sys.argv) > 1:
+        secs = int(sys.argv[1])
     print("Polling every %s seconds from kernel..." % secs)
 
 
@@ -339,7 +340,7 @@ def main():
     rxring = nl_socket.get_ring(mnl.MNL_RING_RX)
     nl_socket.bind(nfnlcm.NF_NETLINK_CONNTRACK_DESTROY, mnl.MNL_SOCKET_AUTOPID)
 
-    # tweak buf
+    # tweak buf for NF_NETLINK_CONNTRACK_DESTROY
     buffersize = 1 << 22
     sock = socket.fromfd(nl_socket.get_fd(), socket.AF_NETLINK, socket.SOCK_RAW)
     sock.setsockopt(socket.SOL_SOCKET, 33, buffersize) # SO_RCVBUFFORCE
@@ -354,7 +355,7 @@ def main():
     set_sending_nlh()
 
     # start sending process
-    p = multiprocessing.Process(target=send_process, args=(carbon_socket,))
+    p = multiprocessing.Process(target=send_process, args=(carbon_socket, secs))
     p.start()
 
     # Every N seconds ...
