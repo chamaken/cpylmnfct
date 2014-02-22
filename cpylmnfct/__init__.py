@@ -723,7 +723,7 @@ class FilterDump(object):
 class Labelmap(object):
     """Conntrack labels
     """
-    def __init__(self, mapfile):
+    def __init__(self, mapfile=None):
         """create a new label map
 
         If mapfile is NULL, the default mapping file is used.
