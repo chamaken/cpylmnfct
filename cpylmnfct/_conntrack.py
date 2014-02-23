@@ -170,9 +170,9 @@ def conntrack_attr_grp_unset(ct, attr_type):
 ## nfct_snprintf - print a conntrack object to a buffer
 def conntrack_snprintf(size, ct, msg_type, out_type, flags):
     c_buf = ctypes.create_string_buffer(size)
-    ret = _cproto.c_nfct_snprintf(ctypes.byref(c_buf), size, ct, msg_type, out_type, flags)
+    ret = _cproto.c_nfct_snprintf(c_buf, size, ct, msg_type, out_type, flags)
     if ret == -1: raise _cproto.os_error()
-    return str(c_buf)
+    return c_buf.value
 
 ## nfct_snprintf_labels - print a bitmask object to a buffer including labels
 def conntrack_snprintf_labels(size, ct, msg_type, out_type, flags, labelmap):
@@ -184,9 +184,9 @@ def conntrack_snprintf_labels(size, ct, msg_type, out_type, flags, labelmap):
         c_labelmap = byref(labelmaps)
     else:
         c_labelmap = None
-    ret = _cproto.c_nfct_snprintf_labels(ctypes.byref(c_buf), size, ct, msg_type, out_type, flags, c_labelmap)
+    ret = _cproto.c_nfct_snprintf_labels(c_buf, size, ct, msg_type, out_type, flags, c_labelmap)
     if ret == -1: raise _cproto.os_error()
-    return str(c_buf)
+    return c_buf.value
 
 ## nfct_cmp - compare two conntrack objects
 conntrack_cmp = _cproto.c_nfct_cmp
