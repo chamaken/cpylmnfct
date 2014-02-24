@@ -786,6 +786,16 @@ class Labelmap(object):
 
 class Bitmask(object):
     """bitmask object
+
+    This object may be set as connlabels or connlabels_mask in nf_conntrack.
+    And will be destroyed when nfct_destroy() is called. This means that
+    it should not be freed independently if set by nfct_set_attr() then
+    __del__ is not implemented. Needs explicit calling destroy() if not set
+    in nf_conntrack.
+
+    Becoming nfct_set_attr() params means there is a way to implement this
+    class as ctypes.Structures subclass. But this might be freed implicitly
+    by nfct_destroy() so that this has messy "raw" property.
     """
     def __init__(self, high, bitmask=None):
         """allocate a new bitmask
@@ -797,6 +807,10 @@ class Bitmask(object):
             bitmask = _conntrack.bitmask_new(high)
         self._bitmask = bitmask
 
+    @property
+    def raw(self):
+        return self._bitmask
+
     def destroy(self):
         """destroy bitmask object
 
@@ -804,11 +818,6 @@ class Bitmask(object):
         """
         _conntrack.bitmask_destroy(self._bitmask)
         del self._bitmask
-
-    def __del__(self):
-        """This function wraps destroy() if underlay _bitmask has exist.
-        """
-        hasattr(self, "_bitmask") and self.destroy()
 
     def clone(self):
         """duplicate a bitmask object

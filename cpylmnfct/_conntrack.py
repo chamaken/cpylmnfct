@@ -49,12 +49,13 @@ def conntrack_set_attr_l(ct, attr_type, value):
 
 ## nfct_set_attr - set the value of a certain conntrack attribute
 def conntrack_set_attr(ct, attr_type, value):
+    # XXX: assume value is ctypes data or c_void_p.value to handle Bitmask
     try:
-        ctypes.sizeof(value)
+        ref = ctypes.byref(value)
     except TypeError:
-        raise OSError(errno.EINVAL, "value must be ctypes type")
+        ref = value
     if attr_type >= ATTR_MAX: raise OSError(errno.EINVAL, "not a valid ct attr type")
-    _cproto.c_nfct_set_attr(ct, attr_type, ctypes.byref(value))
+    _cproto.c_nfct_set_attr(ct, attr_type, ref)
 
 ## nfct_set_attr_u8 - set the value of a certain conntrack attribute
 def conntrack_set_attr_u8(ct, attr_type, value):
