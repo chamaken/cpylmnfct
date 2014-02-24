@@ -784,27 +784,31 @@ class Labelmap(object):
         return False
 
 
-class Bitmask(int):
+class Bitmask(object):
     """bitmask object
-
-    This class is implemented as subclass of int because this can be an
-    (known) attribute for conntrack.
     """
-    def __new__(cls, *args, **kwargs):
+    def __init__(self, high, bitmask=None):
         """allocate a new bitmask
 
         In case of success, this function returns a valid pointer to a memory blob,
         otherwise OSError is raised.
         """
-        if len(args) < 1:
-            raise Exception("max param required")
-        b = _conntrack.bitmask_new(args[0])
-        return super(Bitmask, cls).__new__(cls, b)
+        if bitmask is None:
+            bitmask = _conntrack.bitmask_new(high)
+        self._bitmask = bitmask
+
+    def destroy(self):
+        """destroy bitmask object
+
+        This function releases the memory that is used by the bitmask object.
+        """
+        _conntrack.bitmask_destroy(self._bitmask)
+        del self._bitmask
 
     def __del__(self):
-        """This function wraps bitmask_destroy()
+        """This function wraps destroy() if underlay _bitmask has exist.
         """
-        _conntrack.bitmask_destroy(self)
+        hasattr(self, "_bitmask") and self.destroy()
 
     def clone(self):
         """duplicate a bitmask object
@@ -812,8 +816,7 @@ class Bitmask(int):
         @rtype: Bitmask
         @return: an identical copy of the bitmask
         """
-        b = _conntrack.bitmask_clone(self)
-        return super(Bitmask, self.__class__).__new__(self.__class__, b)
+        return Bitmask(0, _conntrack.bitmask_clone(self._bitmask))
 
     def set_bit(self, bit):
         """set bit in the bitmask
@@ -821,7 +824,7 @@ class Bitmask(int):
         @type bit: number
         @param bit: the bit to set
         """
-        _conntrack.bitmask_set_bit(self, bit)
+        _conntrack.bitmask_set_bit(self._bitmask, bit)
 
     def test_bit(self, bit):
         """test if a bit in the bitmask is set
@@ -832,7 +835,7 @@ class Bitmask(int):
         @rtype: bool
         @return: if a bit in the bitmask is set or not
         """
-        return _conntrack.bitmask_test_bit(self, bit)
+        return _conntrack.bitmask_test_bit(self._bitmask, bit)
 
     def unset_bit(self, bit):
         """unset bit in the bitmask
@@ -840,7 +843,7 @@ class Bitmask(int):
         @type bit: number
         @param bit: the bit to clear
         """
-        _conntrack.bitmask_unset_bit(self, bit)
+        _conntrack.bitmask_unset_bit(self._bitmask, bit)
 
     def maxbit(self):
         """return highest bit that may be set/unset
@@ -848,7 +851,18 @@ class Bitmask(int):
         @rtype: number
         @return: highest bit that may be set/unset
         """
-        return _conntrack.bitmask_maxbit(self)
+        return _conntrack.bitmask_maxbit(self._bitmask)
+
+    def __enter__(self):
+        """
+        """
+        return self
+
+    def __exit__(self, t, v, tb):
+        """
+        """
+        self.destroy()
+        return False
 
 
 class Expect(object):
