@@ -190,6 +190,11 @@ def make_tuple(ct):
     return Tuple(l3proto, server, client, l4proto, port)
 
 
+def mark_cmp(ct, value, mask):
+    return ct.attr_is_set(nfct.ATTR_MARK) \
+        and ct.get_attr_u32(nfct.ATTR_MARK) & mask == value
+
+
 @mnl.header_cb
 def data_cb(nlh, data):
     """mnl callback which update tuple's counter """
@@ -205,6 +210,11 @@ def data_cb(nlh, data):
         except Exception as e:
             log.error("nlmsg_parse: %s" % e)
             return mnl.MNL_CB_OK
+
+        # CTA_MARK:
+        # if you want to filter by mark - only want event entries whose mark is one
+        # if not mark_cmp(ct, 1, 0xffffffff):
+        #     return mnl.MNL_CB_OK
 
         t = make_tuple(ct)
         if t is None: return mnl.MNL_CB_OK
