@@ -96,7 +96,7 @@ second. iptables setup is done by:
   through the network switch uplink will doubly count. Use connmark
   target to avoid it,
 
-    iptables -t nat -I PREROUTING -i eth1 -j CONNMARK --set-mark 1
+    iptables -t mangle -I PREROUTING -i eth1 -j CONNMARK --set-mark 1
 
   and uncomment CTA_MARK lines below appropriately.
 """
@@ -203,6 +203,18 @@ def data_cb(nlh, data):
 
     if nlh.flags & netlink.NLM_F_MULTI == netlink.NLM_F_MULTI:
         dumping = True
+
+    msgtype = nlh.type & 0xFF
+    if msgtype == nfnlct.IPCTNL_MSG_CT_NEW:
+        if nlh.flags & (netlink.NLM_F_CREATE|netlink.NLM_F_EXCL):
+            print("NFCT_T_NEW")
+        else:
+            print("NFCT_T_UPDATE")
+    elif msgtype == nfnlct.IPCTNL_MSG_CT_DELETE:
+        print("NFCT_T_DESTROY")
+    else:
+        print("NFCT_T_UNKNOWN")
+
 
     with nfct.Conntrack() as ct:
         try:
@@ -325,7 +337,8 @@ def send_process(sk, q):
         payload = pickle.dumps(listOfMetricTuples)
         header = struct.pack("!L", len(payload))
         message = header + payload
-        sk.sendall(message)
+        # sk.sendall(message)
+
         log.info("sent entries #: %d, size: %d" % (len(listOfMetricTuples), len(message)))
 
 

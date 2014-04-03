@@ -96,7 +96,7 @@ second. iptables setup is done by:
   through the network switch uplink will doubly count. Use connmark
   target to avoid it,
 
-    iptables -t nat -I PREROUTING -i eth1 -j CONNMARK --set-mark 1
+    iptables -t mangle -I PREROUTING -i eth1 -j CONNMARK --set-mark 1
 
   and uncomment CTA_MARK lines below appropriately.
 """
