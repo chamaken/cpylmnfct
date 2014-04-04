@@ -370,6 +370,12 @@ class FilterIpv6(ctypes.Structure):
     _fields_ = [("addr",	(ctypes.c_uint32 * 4)), # u_int32_t addr[4]
                 ("mask",	(ctypes.c_uint32 * 4))] # u_int32_t mask[4]
 
+class FilterMark(ctypes.Structure):
+    """struct nfct_filter_mark
+    """
+    _fields_ = [("value",	(ctypes.c_uint32)), # u_int32_t value
+                ("mask",	(ctypes.c_uint32))] # u_int32_t mask
+
 class FilterAttr(Enum):
     NFCT_FILTER_L4PROTO = 0		# u_int32_t
     NFCT_FILTER_L4PROTO_STATE = 1	# struct nfct_filter_proto
@@ -377,14 +383,16 @@ class FilterAttr(Enum):
     NFCT_FILTER_DST_IPV4 = 3		# struct nfct_filter_ipv4
     NFCT_FILTER_SRC_IPV6 = 4		# struct nfct_filter_ipv6
     NFCT_FILTER_DST_IPV6 = 5		# struct nfct_filter_ipv6
-    NFCT_FILTER_MAX = 6
+    NFCT_FILTER_MARK = 6		# struct nfct_filter_mark
+    NFCT_FILTER_MAX = 7
 NFCT_FILTER_L4PROTO = 0
 NFCT_FILTER_L4PROTO_STATE = 1
 NFCT_FILTER_SRC_IPV4 = 2
 NFCT_FILTER_DST_IPV4 = 3
 NFCT_FILTER_SRC_IPV6 = 4
 NFCT_FILTER_DST_IPV6 = 5
-NFCT_FILTER_MAX = 6
+NFCT_FILTER_MARK = 6
+NFCT_FILTER_MAX = 7
 
 class FilterLogic(Enum):
     NFCT_FILTER_LOGIC_POSITIVE = 0
