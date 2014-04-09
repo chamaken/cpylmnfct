@@ -370,12 +370,6 @@ class FilterIpv6(ctypes.Structure):
     _fields_ = [("addr",	(ctypes.c_uint32 * 4)), # u_int32_t addr[4]
                 ("mask",	(ctypes.c_uint32 * 4))] # u_int32_t mask[4]
 
-class FilterMark(ctypes.Structure):
-    """struct nfct_filter_mark
-    """
-    _fields_ = [("value",	(ctypes.c_uint32)), # u_int32_t value
-                ("mask",	(ctypes.c_uint32))] # u_int32_t mask
-
 class FilterAttr(Enum):
     NFCT_FILTER_L4PROTO = 0		# u_int32_t
     NFCT_FILTER_L4PROTO_STATE = 1	# struct nfct_filter_proto
