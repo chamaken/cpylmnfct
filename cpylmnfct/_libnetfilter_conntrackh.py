@@ -397,21 +397,6 @@ NFCT_FILTER_LOGIC_NEGATIVE = 1
 NFCT_FILTER_LOGIC_MAX = 2
 
 
-## dump filtering
-class FilterDumpMark(ctypes.Structure):
-    """struct nfct_filter_dump_mark
-    """
-    _fields_ = [("val",		ctypes.c_uint32), # u_int32_t val
-                ("mask",	ctypes.c_uint32)] # u_int32_t mask
-
-class FilterDumpAttr(Enum):
-    NFCT_FILTER_DUMP_MARK = 0	# struct nfct_filter_dump_mark
-    NFCT_FILTER_DUMP_L3NUM = 1	# u_int8_t
-    NFCT_FILTER_DUMP_MAX = 2
-NFCT_FILTER_DUMP_MARK = 0
-NFCT_FILTER_DUMP_L3NUM = 1
-NFCT_FILTER_DUMP_MAX = 2
-
 ## expect attributes
 class ExpectAttr(Enum):
     ATTR_EXP_MASTER = 0		# pointer to conntrack object

@@ -7,7 +7,7 @@ from cpylmnl.linux import netlinkh as netlink
 
 LIBNFCT = ctypes.CDLL("libnetfilter_conntrack.so", use_errno=True)
 
-### treat struct nf_conntrack, nfct_filter, nfct_filter_dump, nf_expect
+### treat struct nf_conntrack, nfct_filter, nf_expect
 ### as opaque - ctypes.c_void_p
 
 ## constructor / destructor
@@ -321,35 +321,7 @@ c_nfct_filter_detach.argtypes = [ctypes.c_int]
 c_nfct_filter_detach.restype = ctypes.c_int
 
 
-## dump filtering
-c_nfct_filter_dump_create = LIBNFCT.nfct_filter_dump_create
-c_nfct_filter_dump_create.__doc__ = """\
-struct nfct_filter_dump *nfct_filter_dump_create(void)"""
-c_nfct_filter_dump_create.argtypes = None
-c_nfct_filter_dump_create.restype = ctypes.c_void_p
-
-c_nfct_filter_dump_destroy = LIBNFCT.nfct_filter_dump_destroy
-c_nfct_filter_dump_destroy.__doc__ = """\
-void nfct_filter_dump_destroy(struct nfct_filter_dump *filter)"""
-c_nfct_filter_dump_destroy.argtypes = [ctypes.c_void_p]
-c_nfct_filter_dump_destroy.restype = None
-
-c_nfct_filter_dump_set_attr = LIBNFCT.nfct_filter_dump_set_attr
-c_nfct_filter_dump_set_attr.__doc__ = """\
-void nfct_filter_dump_set_attr(struct nfct_filter_dump *filter_dump,
-                               const enum nfct_filter_dump_attr type,
-                               const void *data)"""
-c_nfct_filter_dump_set_attr.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p]
-c_nfct_filter_dump_set_attr.restype = None
-
-c_nfct_filter_dump_set_attr_u8 = LIBNFCT.nfct_filter_dump_set_attr_u8
-c_nfct_filter_dump_set_attr_u8.__doc__ = """\
-void nfct_filter_dump_set_attr_u8(struct nfct_filter_dump *filter_dump,
-                                  const enum nfct_filter_dump_attr type,
-                                  u_int8_t data)"""
-c_nfct_filter_dump_set_attr_u8.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_uint8]
-c_nfct_filter_dump_set_attr_u8.restype = None
-
+## NO dump filtering
 
 ## NO low level API: netlink functions
 

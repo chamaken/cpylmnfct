@@ -664,62 +664,6 @@ class Filter(object):
         return False
 
 
-class FilterDump(object):
-    """Kernel-space filtering for dumping
-    """
-    def __init__(self):
-        """create a dump filter
-
-        This function returns a valid pointer on success, otherwise OSError
-        is raised.
-        """
-        self._filter_dump = _conntrack.filter_dump_create()
-
-    def destroy(self):
-        """destroy a dump filter
-
-        This function releases the memory that is used by the filter object.
-        """
-        _conntrack.filter_dump_destroy(self._filter_dump)
-        del self._filter_dump
-
-    def __del__(self):
-        """This function wraps destroy() if underlay _filter_dump has exist.
-        """
-        hasattr(self, "_filter_dump") and self.destroy()
-
-    def set_attr(self, a, v):
-        """set filter attribute
-
-        @type a: number (NFCT_FILTER_DUMP_)
-        @param a: filter dump filter object that we want to modify
-        @type v: FilterDumpMark
-        @param v: the value of the filter attribute
-        """
-        _conntrack.filter_dump_set_attr(self._filter_dump, a, v)
-
-    def set_attr_u8(self, a, v):
-        """set u8 dump filter attribute
-
-        @type a: number (NFCT_FILTER_DUMP_)
-        @param a: filter attribute type
-        @type v: number
-        @param v: value of the filter attribute using unsigned int (32 bits).
-        """
-        _conntrack.filter_dump_set_attr_u8(self._filter_dump, a, v)
-
-    def __enter__(self):
-        """
-        """
-        return self
-
-    def __exit__(self, t, v, tb):
-        """
-        """
-        self.destroy()
-        return False
-
-
 class Labelmap(object):
     """Conntrack labels
     """

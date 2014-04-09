@@ -746,50 +746,6 @@ class TestSuite(unittest.TestCase):
             fl.destroy()
 
 
-    def test_filter_dump(self):
-        try:
-            fld = nfct.FilterDump()
-            fld.destroy()
-        except Exception as e:
-            self.fail("could not create or destroy filter dump: %s" % e)
-        try:
-            fld = nfct.FilterDump()
-            del fld
-        except Exception as e:
-            self.fail("could not create or del filter dump: %s" % e)
-
-
-    def test_filter_dump_set_attr(self):
-        fld = nfct.FilterDump()
-        mark = nfct.FilterDumpMark(val=0x12345678, mask=0xffffffff)
-        try:
-            fld.set_attr(nfct.NFCT_FILTER_DUMP_MARK, mark)
-        except Exception as e:
-            self.fail("could not set attr to filter dump: %s" % e)
-        try:
-            fld.set_attr(nfct.NFCT_FILTER_DUMP_MAX, mark)
-        except OSError as e:
-            self.assertEqual(e.errno, errno.EINVAL)
-        else:
-            self.fail("not raise OSError")
-        fld.destroy()
-
-
-    def test_filter_dump_set_attr_u8(self):
-        fld = nfct.FilterDump()
-        try:
-            fld.set_attr_u8(nfct.NFCT_FILTER_DUMP_L3NUM, 1)
-        except Exception as e:
-            self.fail("could not set u8 attr to filter dump: %s" % e)
-        try:
-            fld.set_attr_u8(nfct.NFCT_FILTER_DUMP_MAX, 1)
-        except OSError as e:
-            self.assertEqual(e.errno, errno.EINVAL)
-        else:
-            self.fail("not raise OSError")
-        fld.destroy()
-
-
     def test_labelmap(self):
         mapfname = os.path.join(os.path.dirname(__file__), "connlabel.conf")
         try:

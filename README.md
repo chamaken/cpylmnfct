@@ -52,16 +52,16 @@ comparison
 | nfct_callback_unregister		| (Not implemented)		|				|
 | nfct_callback_register2		| (Not implemented)		|				|
 | nfct_callback_unregister2		| (Not implemented)		|				|
-| nfct_Bitmask.new			| Bitmask.New			|				|
-| nfct_Bitmask.clone			| Bitmask.clone			|				|
-| nfct_Bitmask.maxbit			| Bitmask.maxbit		|				|
-| nfct_Bitmask.test_bit			| Bitmask.test_bit		|				|
-| nfct_Bitmask.unset_bit		| Bitmask.unset_bit		|				|
-| nfct_Bitmask.destroy			| Bitmask.destroy		|				|
-| nfct_Labelmap.new			| Labelmap.new			|				|
-| nfct_Labelmap.destroy			| Labelmap.destroy		|				|
-| nfct_Labelmap.get_name		| Labelmap.get_name		|				|
-| nfct_Labelmap.get_bit			| Labelmap.get_bit		|				|
+| nfct_bitmask_new			| Bitmask.New			|				|
+| nfct_bitmask_clone			| Bitmask.clone			|				|
+| nfct_bitmask_maxbit			| Bitmask.maxbit		|				|
+| nfct_bitmask_test_bit			| Bitmask.test_bit		|				|
+| nfct_bitmask_unset_bit		| Bitmask.unset_bit		|				|
+| nfct_bitmask.destroy			| Bitmask.destroy		|				|
+| nfct_labelmap.new			| Labelmap.new			|				|
+| nfct_labelmap.destroy			| Labelmap.destroy		|				|
+| nfct_labelmap.get_name		| Labelmap.get_name		|				|
+| nfct_labelmap.get_bit			| Labelmap.get_bit		|				|
 | nfct_set_attr				| Conntrack.set_attr		| value must be a _CData	|
 | nfct_set_attr_u8			| Conntrack.set_attr_u8		|				|
 | nfct_set_attr_u16			| Conntrack.set_attr_u16	|				|
@@ -92,18 +92,18 @@ comparison
 | nfct_copy				| Conntrack.copy		|				|
 | nfct_copy_attr			| Conntrack.copy_attr		|				|
 | ------------------------------------- | ----------------------------- | ----------------------------- | 
-| nfct_Filter.create			| Filter.create			|				|
-| nfct_Filter.destroy			| Filter.destroy		|				|
-| nfct_Filter.add_attr			| Filter.add_attr		|				|
-| nfct_Filter.add_attr_u32		| Filter.add_attr_u32		|				|
-| nfct_Filter.set_logic			| Filter.set_logic		|				|
-| nfct_Filter.attach			| Filter.attach			|				|
-| nfct_Filter.detach			| Filter.detach			|				|
+| nfct_filter_create			| Filter.create			|				|
+| nfct_filter_destroy			| Filter.destroy		|				|
+| nfct_filter_add_attr			| Filter.add_attr		|				|
+| nfct_filter_add_attr_u32		| Filter.add_attr_u32		|				|
+| nfct_filter_set_logic			| Filter.set_logic		|				|
+| nfct_filter_attach			| Filter.attach			|				|
+| nfct_filter_detach			| Filter.detach			|				|
 | ------------------------------------- | ----------------------------- | ----------------------------- | 
-| nfct_FilterDump.create		| FilterDump.create		|				|
-| nfct_FilterDump.destroy		| FilterDump.destroy		|				|
-| nfct_FilterDump.set_attr		| FilterDump.set_attr		|				|
-| nfct_FilterDump.set_attr_u8		| FilterDump.set_attr_U8	|				|
+| nfct_filter_dump_create		| (Not implemented)		|				|
+| nfct_filter_dump_destroy		| (Not implemented)		|				|
+| nfct_filter_dump_set_attr		| (Not implemented)		|				|
+| nfct_filter_dump_set_attr_u8		| (Not implemented)		|				|
 | ------------------------------------- | ----------------------------- | ----------------------------- | 
 | nfct_build_conntrack			| (Not implemented)		|				|
 | nfct_parse_conntrack			| (Not implemented)		|				|
