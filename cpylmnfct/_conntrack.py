@@ -313,6 +313,12 @@ bitmask_maxbit = _cproto.c_nfct_bitmask_maxbit
 ## nfct_bitmask_destroy - destroy bitmask object
 bitmask_destroy = _cproto.c_nfct_bitmask_destroy
 
+## nfct_bitmask_clear - clear a bitmask object
+bitmask_clear = _cproto.c_nfct_bitmask_clear
+
+## nfct_bitmask_equal - compare two bitmask objects
+bitmask_equal = _cproto.c_nfct_bitmask_equal
+
 ##  nfct_nlmsg_build - build a netlink message from a conntrack object
 def conntrack_nlmsg_build(nlh, ct):
     ret = _cproto.c_nfct_nlmsg_build(nlh, ct)

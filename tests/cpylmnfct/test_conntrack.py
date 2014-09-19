@@ -863,3 +863,41 @@ class TestSuite(unittest.TestCase):
         bm = nfct.Bitmask(192)
         self.assertEqual(bm.maxbit(), 192 + 32 - 1)
         bm.destroy()
+
+
+    def test_bitmask_clear(self):
+        bm = nfct.Bitmask(192)
+        for i in range(192):
+            bm.set_bit(i)
+        bm.clear()
+        for i in range(192):
+            self.assertFalse(bm.test_bit(i))
+        bm.destroy()
+
+
+    def test_bitmask_eq(self):
+        bm1 = nfct.Bitmask(192)
+        bm2 = nfct.Bitmask(192)
+        for i in range(0, 192, 2):
+            bm1.set_bit(i)
+        for i in range(1, 192, 2):
+            bm2.set_bit(i)
+        self.assertFalse(bm1 == bm2)
+        bm2.destroy()
+
+        bm2 = nfct.Bitmask(192)
+        for i in range(0, 192, 2):
+            bm2.set_bit(i)
+        self.assertTrue(bm1 == bm2)
+        bm2.destroy()
+
+        bm2 = bm1.clone()
+        self.assertTrue(bm1 == bm2)
+        bm2.destroy()
+
+        bm1.destroy()
+        bm1 = nfct.Bitmask(192)
+        for i in range(192 - 32):
+            bm2 = nfct.Bitmask(i)
+            self.assertTrue(bm1 != bm2)
+            bm2.destroy()

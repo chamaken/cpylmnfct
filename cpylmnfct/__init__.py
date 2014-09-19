@@ -862,6 +862,22 @@ class Bitmask(object):
         """
         return _conntrack.bitmask_maxbit(self._bitmask)
 
+    def clear(self):
+        """clear a bitmask object
+        """
+        return _conntrack.bitmask_clear(self._bitmask)
+
+    def __eq__(self, other):
+        """compare two bitmask objects
+
+        @type other: Bitmask
+        @param other: a valid bitmask object
+
+        @rtype: bool
+        @return: equal or not
+        """
+        return _conntrack.bitmask_equal(self._bitmask, other._bitmask)
+
     def __enter__(self):
         """
         """

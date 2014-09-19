@@ -89,6 +89,18 @@ void nfct_bitmask_destroy(struct nfct_bitmask *)"""
 c_nfct_bitmask_destroy.argtypes = [ctypes.c_void_p]
 c_nfct_bitmask_destroy.restype = None
 
+c_nfct_bitmask_clear = LIBNFCT.nfct_bitmask_clear
+c_nfct_bitmask_clear.__doc__ = """\
+void nfct_bitmask_clear(struct nfct_bitmask *b)"""
+c_nfct_bitmask_clear.argtypes = [ctypes.c_void_p]
+c_nfct_bitmask_clear.restype = None
+
+c_nfct_bitmask_equal = LIBNFCT.nfct_bitmask_equal
+c_nfct_bitmask_equal.__doc__ = """\
+bool nfct_bitmask_equal(const struct nfct_bitmask *b1, const struct nfct_bitmask *b2)"""
+c_nfct_bitmask_equal.argtypes = [ctypes.c_void_p]
+c_nfct_bitmask_equal.restype = ctypes.c_bool
+
 
 ## connlabel name <-> bit translation mapping
 c_nfct_labelmap_new = LIBNFCT.nfct_labelmap_new
