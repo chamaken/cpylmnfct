@@ -675,8 +675,10 @@ class TestSuite(unittest.TestCase):
     def test_filter_add_attr(self):
         fl = nfct.Filter()
         src4 = nfct.FilterIpv4(addr=0x12345678, mask=0xffff0000)
+        mark = nfct.FilterDumpMark(val=0x12345678, mask=0xffffffff)
         try:
             fl.add_attr(nfct.NFCT_FILTER_SRC_IPV4, src4)
+            fl.add_attr(nfct.NFCT_FILTER_MARK, mark)
         except Exception as e:
             raise
             self.fail("could not add attr to filter: %s" % e)
