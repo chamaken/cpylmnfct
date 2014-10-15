@@ -20,4 +20,6 @@ setup(name='cpylmnfct',
                    'Operating System :: Linux',
                    'Intended Audience :: Developers',
                    'Development Status :: 2 - Pre-Alpha'],
-      long_description=readme.read())
+      long_description=readme.read(),
+      test_suite = 'nose.collector',
+)
