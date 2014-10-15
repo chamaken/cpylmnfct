@@ -878,6 +878,9 @@ class Bitmask(object):
         """
         return _conntrack.bitmask_equal(self._bitmask, other._bitmask)
 
+    def __ne__(self, other):
+        return not self._bitmask == other._bitmask
+
     def __enter__(self):
         """
         """
