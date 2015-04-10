@@ -1,8 +1,12 @@
 #!/usr/bin/env python
 
-from distutils.core import setup
+# http://stackoverflow.com/questions/6344076/differences-between-distribute-distutils-setuptools-and-distutils2
 
-readme = open("README.md", "r")
+import os
+from setuptools import setup
+
+def read(fname):
+    return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 setup(name='cpylmnfct',
       version='0.1',
@@ -19,7 +23,9 @@ setup(name='cpylmnfct',
                    'Python Modules',
                    'Operating System :: Linux',
                    'Intended Audience :: Developers',
-                   'Development Status :: 2 - Pre-Alpha'],
-      long_description=readme.read(),
+                   'Development Status :: 3 - Alpha Development Status'],
+      long_description=read('README.md'),
       test_suite = 'nose.collector',
+      install_requires = ['cpylmnl'],
+      dependency_links=['https://github.com/chamaken/cpylmnl/zipball/master#egg=cpylmnl'],
 )
