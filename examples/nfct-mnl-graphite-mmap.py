@@ -201,7 +201,7 @@ def data_cb(nlh, data):
     global nstats
     global dumping
 
-    if nlh.flags & netlink.NLM_F_MULTI == netlink.NLM_F_MULTI:
+    if nlh.nlmsg_flags & netlink.NLM_F_MULTI == netlink.NLM_F_MULTI:
         dumping = True
 
     with nfct.Conntrack() as ct:
@@ -221,7 +221,7 @@ def data_cb(nlh, data):
 
         counter = nstats.setdefault(t, Counter(0, 0))
 
-        if nlh.type & 0xff == nfnlct.IPCTNL_MSG_CT_DELETE:
+        if nlh.nlmsg_type & 0xff == nfnlct.IPCTNL_MSG_CT_DELETE:
             counter.deleting = True
 
         try:
@@ -261,13 +261,13 @@ def start_periodic_task(secs, nl, q):
 
     Unfortunately we could not acquire remainded time from Python's select
     """
-    nlh = mnl.Header.put_new_header(mnl.MNL_SOCKET_BUFFER_SIZE)
+    nlh = mnl.Msghdr.put_new_header(mnl.MNL_SOCKET_BUFFER_SIZE)
     # Counters are atomically zerod in each dump
-    nlh.type = (nfnl.NFNL_SUBSYS_CTNETLINK << 8) | nfnlct.IPCTNL_MSG_CT_GET_CTRZERO
-    nlh.flags = netlink.NLM_F_REQUEST|netlink.NLM_F_DUMP
+    nlh.nlmsg_type = (nfnl.NFNL_SUBSYS_CTNETLINK << 8) | nfnlct.IPCTNL_MSG_CT_GET_CTRZERO
+    nlh.nlmsg_flags = netlink.NLM_F_REQUEST|netlink.NLM_F_DUMP
 
     nfh = nlh.put_extra_header_as(nfnl.Nfgenmsg)
-    nfh.family = socket.AF_INET
+    nfh.nfgen_family = socket.AF_INET
     nfh.version = nfnl.NFNETLINK_V0
     nfh.res_id = 0
 

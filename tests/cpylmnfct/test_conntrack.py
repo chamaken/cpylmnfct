@@ -642,13 +642,13 @@ class TestSuite(unittest.TestCase):
         ct = nfct.Conntrack()
         nlh = netlink.Nlmsghdr(self.nlmsgbuf10)
         ct.nlmsg_parse(nlh)
-        nlh = mnl.Header.put_new_header(1024)
-        nlh.type = (nfnl.NFNL_SUBSYS_CTNETLINK << 8) | nfnlct.IPCTNL_MSG_CT_DELETE
-        nlh.flags = 0
-        nlh.seq = 0
-        nlh.portid = 0
+        nlh = mnl.Msghdr.put_new_header(1024)
+        nlh.nlmsg_type = (nfnl.NFNL_SUBSYS_CTNETLINK << 8) | nfnlct.IPCTNL_MSG_CT_DELETE
+        nlh.nlmsg_flags = 0
+        nlh.nlmsg_seq = 0
+        nlh.nlmsg_portid = 0
         nfh = nlh.put_extra_header_as(nfnl.Nfgenmsg)
-        nfh.family = socket.AF_INET
+        nfh.nfgen_family = socket.AF_INET
         nfh.version = nfnl.NFNETLINK_V0
         nfh.res_id = 0
 

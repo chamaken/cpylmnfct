@@ -22,14 +22,14 @@ def main():
     nl.bind(0, mnl.MNL_SOCKET_AUTOPID)
     portid = nl.get_portid()
 
-    nlh = mnl.Header.put_new_header(mnl.MNL_SOCKET_BUFFER_SIZE)
-    nlh.type = (nfnl.NFNL_SUBSYS_CTNETLINK << 8) | nfnlct.IPCTNL_MSG_CT_NEW
-    nlh.flags = netlink.NLM_F_REQUEST|netlink.NLM_F_CREATE|netlink.NLM_F_EXCL|netlink.NLM_F_ACK
+    nlh = mnl.Msghdr.put_new_header(mnl.MNL_SOCKET_BUFFER_SIZE)
+    nlh.nlmsg_type = (nfnl.NFNL_SUBSYS_CTNETLINK << 8) | nfnlct.IPCTNL_MSG_CT_NEW
+    nlh.nlmsg_flags = netlink.NLM_F_REQUEST|netlink.NLM_F_CREATE|netlink.NLM_F_EXCL|netlink.NLM_F_ACK
     seq = int(time.time())
-    nlh.seq = seq
+    nlh.nlmsg_seq = seq
 
     nfh = nlh.put_extra_header_as(nfnl.Nfgenmsg)
-    nfh.family = socket.AF_INET
+    nfh.nfgen_family = socket.AF_INET
     nfh.version = nfnl.NFNETLINK_V0
     nfh.res_id = 0
 

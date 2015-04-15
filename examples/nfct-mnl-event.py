@@ -19,10 +19,10 @@ log = logging.getLogger(__name__)
 @mnl.header_cb
 def data_cb(nlh, data):
     mtype = nfct.NFCT_T_UNKNOWN
-    htype = nlh.type & 0xFF
+    htype = nlh.nlmsg_type & 0xFF
 
     if htype == nfnlct.IPCTNL_MSG_CT_NEW:
-        if nlh.flags & (netlink.NLM_F_CREATE|netlink.NLM_F_EXCL) != 0:
+        if nlh.nlmsg_flags & (netlink.NLM_F_CREATE|netlink.NLM_F_EXCL) != 0:
             mtype = nfct.NFCT_T_NEW
         else:
             mtype = nfct.NFCT_T_UPDATE
