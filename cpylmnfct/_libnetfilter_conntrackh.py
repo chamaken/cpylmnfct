@@ -217,21 +217,21 @@ ATTR_GRP_MAX = 16
 
 class AttrGrpIpv4(ctypes.Structure):
     """struct nfct_attr_grp_ipv4
-	u_int32_t src, dst
+	uint32_t src, dst
     """
     _fields_ = [("src",		ctypes.c_uint32),
                 ("dst",		ctypes.c_uint32)]
 
 class AttrGrpIpv6(ctypes.Structure):
     """struct nfct_attr_grp_ipv6
-        u_int32_t src[4], dst[4]
+        uint32_t src[4], dst[4]
     """
     _fields_ = [("src", 	(ctypes.c_uint32 * 4)),
                 ("dst",		(ctypes.c_uint32 * 4))]
 
 class AttrGrpPort(ctypes.Structure):
     """struct nfct_attr_grp_port
-	u_int16_t sport, dport
+	uint16_t sport, dport
     """
     _fields_ = [("sport", 	ctypes.c_uint16),
                 ("dport", 	ctypes.c_uint16)]
@@ -239,22 +239,22 @@ class AttrGrpPort(ctypes.Structure):
 class AttrGrpIcmp(ctypes.Structure):
     """struct nfct_attr_grp_icmp
     """
-    _fields_ = [("id", 		ctypes.c_uint16), # u_int16_t id
-                ("code", 	ctypes.c_uint8),  # u_int8_t code, type
+    _fields_ = [("id", 		ctypes.c_uint16), # uint16_t id
+                ("code", 	ctypes.c_uint8),  # uint8_t code, type
                 ("type", 	ctypes.c_uint8)]
 
 class AttrGrpCtrs(ctypes.Structure):
     """struct nfct_attr_grp_ctrs
     """
-    _fields_ = [("packets",	ctypes.c_uint64), # u_int64_t packets
-                ("bytes", 	ctypes.c_uint64)] # u_int64_t bytes
+    _fields_ = [("packets",	ctypes.c_uint64), # uint64_t packets
+                ("bytes", 	ctypes.c_uint64)] # uint64_t bytes
 
 class AttrGrpAddr(ctypes.Union):
     """union nfct_attr_grp_addr
     """
-    _fields_ = [("ip",		ctypes.c_uint32),       # u_int32_t ip
-                ("ip6",		(ctypes.c_uint32 * 4)), # u_int32_t ip6[4]
-                ("addr",	(ctypes.c_uint32 * 4))] # u_int32_t addr[4]
+    _fields_ = [("ip",		ctypes.c_uint32),       # uint32_t ip
+                ("ip6",		(ctypes.c_uint32 * 4)), # uint32_t ip6[4]
+                ("addr",	(ctypes.c_uint32 * 4))] # uint32_t addr[4]
 
 ## message type
 # enum nf_conntrack_msg_type
@@ -355,23 +355,23 @@ NFCT_CP_OVERRIDE = (1 << 3)
 class FilterProto(ctypes.Structure):
     """struct nfct_filter_proto
     """
-    _fields_ = [("proto",	ctypes.c_uint16), # u_int16_t proto
-                ("state",	ctypes.c_uint16)] # u_int16_t state
+    _fields_ = [("proto",	ctypes.c_uint16), # uint16_t proto
+                ("state",	ctypes.c_uint16)] # uint16_t state
 
 class FilterIpv4(ctypes.Structure):
     """struct nfct_filter_ipv4
     """
-    _fields_ = [("addr", 	ctypes.c_uint32), # u_int32_t addr
-                ("mask", 	ctypes.c_uint32)] # u_int32_t mask
+    _fields_ = [("addr", 	ctypes.c_uint32), # uint32_t addr
+                ("mask", 	ctypes.c_uint32)] # uint32_t mask
 
 class FilterIpv6(ctypes.Structure):
     """struct nfct_filter_ipv6
     """
-    _fields_ = [("addr",	(ctypes.c_uint32 * 4)), # u_int32_t addr[4]
-                ("mask",	(ctypes.c_uint32 * 4))] # u_int32_t mask[4]
+    _fields_ = [("addr",	(ctypes.c_uint32 * 4)), # uint32_t addr[4]
+                ("mask",	(ctypes.c_uint32 * 4))] # uint32_t mask[4]
 
 class FilterAttr(Enum):
-    NFCT_FILTER_L4PROTO = 0		# u_int32_t
+    NFCT_FILTER_L4PROTO = 0		# uint32_t
     NFCT_FILTER_L4PROTO_STATE = 1	# struct nfct_filter_proto
     NFCT_FILTER_SRC_IPV4 = 2		# struct nfct_filter_ipv4
     NFCT_FILTER_DST_IPV4 = 3		# struct nfct_filter_ipv4
@@ -401,12 +401,12 @@ NFCT_FILTER_LOGIC_MAX = 2
 class FilterDumpMark(ctypes.Structure):
     """struct nfct_filter_dump_mark
     """
-    _fields_ = [("val",		ctypes.c_uint32), # u_int32_t val
-                ("mask",	ctypes.c_uint32)] # u_int32_t mask
+    _fields_ = [("val",		ctypes.c_uint32), # uint32_t val
+                ("mask",	ctypes.c_uint32)] # uint32_t mask
 
 class FilterDumpAttr(Enum):
     NFCT_FILTER_DUMP_MARK = 0	# struct nfct_filter_dump_mark
-    NFCT_FILTER_DUMP_L3NUM = 1	# u_int8_t
+    NFCT_FILTER_DUMP_L3NUM = 1	# uint8_t
     NFCT_FILTER_DUMP_MAX = 2
 NFCT_FILTER_DUMP_MARK = 0
 NFCT_FILTER_DUMP_L3NUM = 1

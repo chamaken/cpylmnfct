@@ -138,25 +138,25 @@ c_nfct_set_attr.restype = None
 
 c_nfct_set_attr_u8 = LIBNFCT.nfct_set_attr_u8
 c_nfct_set_attr_u8.__doc__ = """\
-void nfct_set_attr_u8(struct nf_conntrack *ct, const enum nf_conntrack_attr type, u_int8_t value)"""
+void nfct_set_attr_u8(struct nf_conntrack *ct, const enum nf_conntrack_attr type, uint8_t value)"""
 c_nfct_set_attr_u8.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_uint8]
 c_nfct_set_attr_u8.restype = None
 
 c_nfct_set_attr_u16 = LIBNFCT.nfct_set_attr_u16
 c_nfct_set_attr_u16.__doc__ = """\
-void nfct_set_attr_u16(struct nf_conntrack *ct, const enum nf_conntrack_attr type, u_int16_t value)"""
+void nfct_set_attr_u16(struct nf_conntrack *ct, const enum nf_conntrack_attr type, uint16_t value)"""
 c_nfct_set_attr_u16.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_uint16]
 c_nfct_set_attr_u16.restype = None
 
 c_nfct_set_attr_u32 = LIBNFCT.nfct_set_attr_u32
 c_nfct_set_attr_u32.__doc__ = """\
-void nfct_set_attr_u32(struct nf_conntrack *ct, const enum nf_conntrack_attr type, u_int32_t value)"""
+void nfct_set_attr_u32(struct nf_conntrack *ct, const enum nf_conntrack_attr type, uint32_t value)"""
 c_nfct_set_attr_u32.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_uint32]
 c_nfct_set_attr_u32.restype = None
 
 c_nfct_set_attr_u64 = LIBNFCT.nfct_set_attr_u64
 c_nfct_set_attr_u64.__doc__ = """\
-void nfct_set_attr_u64(struct nf_conntrack *ct, const enum nf_conntrack_attr type, u_int64_t value)"""
+void nfct_set_attr_u64(struct nf_conntrack *ct, const enum nf_conntrack_attr type, uint64_t value)"""
 c_nfct_set_attr_u64.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64]
 c_nfct_set_attr_u64.restype = None
 
@@ -177,25 +177,25 @@ c_nfct_get_attr.restype = ctypes.c_void_p
 
 c_nfct_get_attr_u8 = LIBNFCT.nfct_get_attr_u8
 c_nfct_get_attr_u8.__doc__ = """\
-u_int8_t nfct_get_attr_u8(const struct nf_conntrack *ct, const enum nf_conntrack_attr type)"""
+uint8_t nfct_get_attr_u8(const struct nf_conntrack *ct, const enum nf_conntrack_attr type)"""
 c_nfct_get_attr_u8.argtypes = [ctypes.c_void_p, ctypes.c_int]
 c_nfct_get_attr_u8.restype = ctypes.c_uint8
 
 c_nfct_get_attr_u16 = LIBNFCT.nfct_get_attr_u16
 c_nfct_get_attr_u16.__doc__ = """\
-u_int16_t nfct_get_attr_u16(const struct nf_conntrack *ct, const enum nf_conntrack_attr type)"""
+uint16_t nfct_get_attr_u16(const struct nf_conntrack *ct, const enum nf_conntrack_attr type)"""
 c_nfct_get_attr_u16.argtypes = [ctypes.c_void_p, ctypes.c_int]
 c_nfct_get_attr_u16.restype = ctypes.c_uint16
 
 c_nfct_get_attr_u32 = LIBNFCT.nfct_get_attr_u32
 c_nfct_get_attr_u32.__doc__ = """\
-u_int32_t nfct_get_attr_u32(const struct nf_conntrack *ct, const enum nf_conntrack_attr type)"""
+uint32_t nfct_get_attr_u32(const struct nf_conntrack *ct, const enum nf_conntrack_attr type)"""
 c_nfct_get_attr_u32.argtypes = [ctypes.c_void_p, ctypes.c_int]
 c_nfct_get_attr_u32.restype = ctypes.c_uint32
 
 c_nfct_get_attr_u64 = LIBNFCT.nfct_get_attr_u64
 c_nfct_get_attr_u64.__doc__ = """\
-u_int64_t nfct_get_attr_u64(const struct nf_conntrack *ct, const enum nf_conntrack_attr type)"""
+uint64_t nfct_get_attr_u64(const struct nf_conntrack *ct, const enum nf_conntrack_attr type)"""
 c_nfct_get_attr_u64.argtypes = [ctypes.c_void_p, ctypes.c_int]
 c_nfct_get_attr_u64.restype = ctypes.c_uint64
 
@@ -309,7 +309,7 @@ c_nfct_filter_add_attr.restype = None
 
 c_nfct_filter_add_attr_u32 = LIBNFCT.nfct_filter_add_attr_u32
 c_nfct_filter_add_attr_u32.__doc__ = """\
-void nfct_filter_add_attr_u32(struct nfct_filter *filter, const enum nfct_filter_attr attr, const u_int32_t value)"""
+void nfct_filter_add_attr_u32(struct nfct_filter *filter, const enum nfct_filter_attr attr, const uint32_t value)"""
 c_nfct_filter_add_attr_u32.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_uint32]
 c_nfct_filter_add_attr_u32.restype = None
 
@@ -358,7 +358,7 @@ c_nfct_filter_dump_set_attr_u8 = LIBNFCT.nfct_filter_dump_set_attr_u8
 c_nfct_filter_dump_set_attr_u8.__doc__ = """\
 void nfct_filter_dump_set_attr_u8(struct nfct_filter_dump *filter_dump,
                                   const enum nfct_filter_dump_attr type,
-                                  u_int8_t data)"""
+                                  uint8_t data)"""
 c_nfct_filter_dump_set_attr_u8.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_uint8]
 c_nfct_filter_dump_set_attr_u8.restype = None
 
@@ -420,19 +420,19 @@ c_nfexp_argtype = None
 
 c_nfexp_set_attr_u8 = LIBNFCT.nfexp_set_attr_u8
 c_nfexp_set_attr_u8.__doc__ = """\
-void nfexp_set_attr_u8(struct nf_expect *exp, const enum nf_expect_attr type, u_int8_t value)"""
+void nfexp_set_attr_u8(struct nf_expect *exp, const enum nf_expect_attr type, uint8_t value)"""
 c_nfexp_set_attr_u8.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_uint8]
 c_nfexp_set_attr_u8.restype = None
 
 c_nfexp_set_attr_u16 = LIBNFCT.nfexp_set_attr_u16
 c_nfexp_set_attr_u16.__doc__ = """\
-void nfexp_set_attr_u16(struct nf_expect *exp, const enum nf_expect_attr type, u_int16_t value)"""
+void nfexp_set_attr_u16(struct nf_expect *exp, const enum nf_expect_attr type, uint16_t value)"""
 c_nfexp_set_attr_u16.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_uint16]
 c_nfexp_set_attr_u16.restype = None
 
 c_nfexp_set_attr_u32 = LIBNFCT.nfexp_set_attr_u32
 c_nfexp_set_attr_u32.__doc__ = """\
-void nfexp_set_attr_u32(struct nf_expect *exp, const enum nf_expect_attr type, u_int32_t value)"""
+void nfexp_set_attr_u32(struct nf_expect *exp, const enum nf_expect_attr type, uint32_t value)"""
 c_nfexp_set_attr_u32.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_uint32]
 c_nfexp_set_attr_u32.restype = None
 
@@ -445,19 +445,19 @@ c_nfexp_get_attr.restype = ctypes.c_void_p
 
 c_nfexp_get_attr_u8 = LIBNFCT.nfexp_get_attr_u8
 c_nfexp_get_attr_u8.__doc__ = """\
-u_int8_t nfexp_get_attr_u8(const struct nf_expect *exp, const enum nf_expect_attr type)"""
+uint8_t nfexp_get_attr_u8(const struct nf_expect *exp, const enum nf_expect_attr type)"""
 c_nfexp_get_attr_u8.argtypes = [ctypes.c_void_p, ctypes.c_int]
 c_nfexp_get_attr_u8.restype = ctypes.c_uint8
 
 c_nfexp_get_attr_u16 = LIBNFCT.nfexp_get_attr_u16
 c_nfexp_get_attr_u16.__doc__ = """\
-u_int16_t nfexp_get_attr_u16(const struct nf_expect *exp, const enum nf_expect_attr type)"""
+uint16_t nfexp_get_attr_u16(const struct nf_expect *exp, const enum nf_expect_attr type)"""
 c_nfexp_get_attr_u16.argtypes = [ctypes.c_void_p, ctypes.c_int]
 c_nfexp_get_attr_u16.restype = ctypes.c_uint16
 
 c_nfexp_get_attr_u32 = LIBNFCT.nfexp_get_attr_u32
 c_nfexp_get_attr_u32.__doc__ = """\
-u_int32_t nfexp_get_attr_u32(const struct nf_expect *exp, const enum nf_expect_attr type)"""
+uint32_t nfexp_get_attr_u32(const struct nf_expect *exp, const enum nf_expect_attr type)"""
 c_nfexp_get_attr_u32.argtypes = [ctypes.c_void_p, ctypes.c_int]
 c_nfexp_get_attr_u32.restype = ctypes.c_uint32
 
