@@ -16,7 +16,7 @@ import cpylmnfct as nfct
 log = logging.getLogger(__name__)
 
 
-@mnl.header_cb
+@mnl.nlmsg_cb
 def data_cb(nlh, data):
     mtype = nfct.NFCT_T_UNKNOWN
     htype = nlh.nlmsg_type & 0xFF

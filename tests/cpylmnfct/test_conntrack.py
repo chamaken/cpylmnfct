@@ -642,7 +642,7 @@ class TestSuite(unittest.TestCase):
         ct = nfct.Conntrack()
         nlh = netlink.Nlmsghdr(self.nlmsgbuf10)
         ct.nlmsg_parse(nlh)
-        nlh = mnl.Msghdr.put_new_header(1024)
+        nlh = mnl.Nlmsg.put_new_header(1024)
         nlh.nlmsg_type = (nfnl.NFNL_SUBSYS_CTNETLINK << 8) | nfnlct.IPCTNL_MSG_CT_DELETE
         nlh.nlmsg_flags = 0
         nlh.nlmsg_seq = 0

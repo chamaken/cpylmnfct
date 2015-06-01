@@ -195,7 +195,7 @@ def mark_cmp(ct, value, mask):
         and ct.get_attr_u32(nfct.ATTR_MARK) & mask == value
 
 
-@mnl.header_cb
+@mnl.nlmsg_cb
 def data_cb(nlh, data):
     """mnl callback which update tuple's counter """
     global nstats
@@ -273,7 +273,7 @@ def start_periodic_task(secs, nl, q):
 
     Unfortunately we could not acquire remainded time from Python's select
     """
-    nlh = mnl.Msghdr.put_new_header(mnl.MNL_SOCKET_BUFFER_SIZE)
+    nlh = mnl.Nlmsg.put_new_header(mnl.MNL_SOCKET_BUFFER_SIZE)
     # Counters are atomically zerod in each dump
     nlh.nlmsg_type = (nfnl.NFNL_SUBSYS_CTNETLINK << 8) | nfnlct.IPCTNL_MSG_CT_GET_CTRZERO
     nlh.nlmsg_flags = netlink.NLM_F_REQUEST|netlink.NLM_F_DUMP

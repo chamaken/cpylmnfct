@@ -33,7 +33,7 @@ def print_label(ct, labelmap):
             print("\t'%s' (%d)" % (name, i))
 
 
-@mnl.header_cb
+@mnl.nlmsg_cb
 def data_cb(nlh, data):
     ct = nfct.Conntrack()
     ct.nlmsg_parse(nlh)
@@ -55,7 +55,7 @@ def main():
     nl.bind(0, mnl.MNL_SOCKET_AUTOPID)
     portid = nl.get_portid()
 
-    nlh = mnl.Msghdr.put_new_header(mnl.MNL_SOCKET_BUFFER_SIZE)
+    nlh = mnl.Nlmsg.put_new_header(mnl.MNL_SOCKET_BUFFER_SIZE)
     nlh.nlmsg_type = (nfnl.NFNL_SUBSYS_CTNETLINK << 8) | nfnlct.IPCTNL_MSG_CT_GET
     nlh.nlmsg_flags = netlink.NLM_F_REQUEST|netlink.NLM_F_DUMP
     seq = int(time.time())
