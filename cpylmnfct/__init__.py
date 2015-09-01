@@ -419,7 +419,7 @@ class Conntrack(object):
         @rtype: string
         @return: Conntrack string representation
         """
-        return _conntrack.conntrack_snprintf(s, self._ct, m, o, f)
+        return _conntrack.conntrack_snprintf(s, self._ct, m, o, f).decode("utf-8")
 
     def snprintf_labels(self, s, m, o, f, l):
         """print a bitmask object to a buffer including labels
