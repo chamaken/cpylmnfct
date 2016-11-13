@@ -867,6 +867,7 @@ class TestSuite(unittest.TestCase):
         bm.destroy()
 
 
+    @unittest.skipIf(not nfct._HAS_BITMASK_CLEAR, "skipped test due to _HAS_BITMASK_CLEAR")
     def test_bitmask_clear(self):
         bm = nfct.Bitmask(192)
         for i in range(192):
@@ -877,6 +878,7 @@ class TestSuite(unittest.TestCase):
         bm.destroy()
 
 
+    @unittest.skipIf(not nfct._HAS_BITMASK_EQUAL, "skipped test due to _HAS_BITMASK_EQUAL")
     def test_bitmask_eq(self):
         bm1 = nfct.Bitmask(192)
         bm2 = nfct.Bitmask(192)

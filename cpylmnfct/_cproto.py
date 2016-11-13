@@ -7,6 +7,9 @@ from cpylmnl.linux import netlinkh as netlink
 
 LIBNFCT = ctypes.CDLL("libnetfilter_conntrack.so", use_errno=True)
 
+_HAS_BITMASK_CLEAR = False
+_HAS_BITMASK_EQUAL = False
+
 ### treat struct nf_conntrack, nfct_filter, nfct_filter_dump, nf_expect
 ### as opaque - ctypes.c_void_p
 
@@ -89,18 +92,27 @@ void nfct_bitmask_destroy(struct nfct_bitmask *)"""
 c_nfct_bitmask_destroy.argtypes = [ctypes.c_void_p]
 c_nfct_bitmask_destroy.restype = None
 
-c_nfct_bitmask_clear = LIBNFCT.nfct_bitmask_clear
-c_nfct_bitmask_clear.__doc__ = """\
-void nfct_bitmask_clear(struct nfct_bitmask *b)"""
-c_nfct_bitmask_clear.argtypes = [ctypes.c_void_p]
-c_nfct_bitmask_clear.restype = None
+try:
+    c_nfct_bitmask_clear = LIBNFCT.nfct_bitmask_clear
+    c_nfct_bitmask_clear.__doc__ = """\
+    void nfct_bitmask_clear(struct nfct_bitmask *b)"""
+    c_nfct_bitmask_clear.argtypes = [ctypes.c_void_p]
+    c_nfct_bitmask_clear.restype = None
+    _HAS_BITMAKS_CLEAR = True
+except AttributeError:
+    def c_nfct_bitmask_clear(b):
+        raise NotImplemented("requires libnetfilter_conntrack >= 1.0.5")
 
-c_nfct_bitmask_equal = LIBNFCT.nfct_bitmask_equal
-c_nfct_bitmask_equal.__doc__ = """\
-bool nfct_bitmask_equal(const struct nfct_bitmask *b1, const struct nfct_bitmask *b2)"""
-c_nfct_bitmask_equal.argtypes = [ctypes.c_void_p]
-c_nfct_bitmask_equal.restype = ctypes.c_bool
-
+try:
+    c_nfct_bitmask_equal = LIBNFCT.nfct_bitmask_equal
+    c_nfct_bitmask_equal.__doc__ = """\
+    bool nfct_bitmask_equal(const struct nfct_bitmask *b1, const struct nfct_bitmask *b2)"""
+    c_nfct_bitmask_equal.argtypes = [ctypes.c_void_p]
+    c_nfct_bitmask_equal.restype = ctypes.c_bool
+    _HAS_BITMASK_EQUAL = True
+except AttributeError:
+    def c_nfct_bitmask_equal(b1, b2):
+        raise NotImplemented("requires libnetfilter_conntrack >= 1.0.5")
 
 ## connlabel name <-> bit translation mapping
 c_nfct_labelmap_new = LIBNFCT.nfct_labelmap_new

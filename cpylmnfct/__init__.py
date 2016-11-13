@@ -1152,3 +1152,5 @@ class Expect(object):
         """
         self.destroy()
         return False
+
+from ._cproto import _HAS_BITMASK_CLEAR, _HAS_BITMASK_EQUAL
