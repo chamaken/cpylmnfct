@@ -27,6 +27,11 @@ def data_cb(nlh, data):
 
 
 def main():
+    if len(sys.argv) != 2:
+        print("Usage: %s [id]" % sys.argv[0])
+        sys.exit(-1)
+    icmp_id = socket.htons(int(sys.argv[1]))
+
     buf = bytearray(mnl.MNL_SOCKET_BUFFER_SIZE)
 
     with mnl.Socket(netlink.NETLINK_NETFILTER) as nl:
@@ -46,12 +51,13 @@ def main():
 
         with nfct.Conntrack() as ct:
             ct.set_attr_u8(nfct.ATTR_L3PROTO, socket.AF_INET)
-            ct.set_attr_u32(nfct.ATTR_IPV4_SRC, int(ipaddr.IPv4Address("1.1.1.1")))
-            ct.set_attr_u32(nfct.ATTR_IPV4_DST, int(ipaddr.IPv4Address("2.2.2.2")))
+            ct.set_attr_u32(nfct.ATTR_IPV4_SRC, socket.htonl(int(ipaddr.IPv4Address("127.0.0.1"))))
+            ct.set_attr_u32(nfct.ATTR_IPV4_DST, socket.htonl(int(ipaddr.IPv4Address("127.0.0.1"))))
 
-            ct.set_attr_u8(nfct.ATTR_L4PROTO, socket.IPPROTO_TCP)
-            ct.set_attr_u16(nfct.ATTR_PORT_SRC, socket.htons(20))
-            ct.set_attr_u16(nfct.ATTR_PORT_DST, socket.htons(10))
+            ct.set_attr_u8(nfct.ATTR_L4PROTO, socket.IPPROTO_ICMP)
+            ct.set_attr_u8(nfct.ATTR_ICMP_TYPE, 8)
+            ct.set_attr_u8(nfct.ATTR_ICMP_CODE, 0)
+            ct.set_attr_u16(nfct.ATTR_ICMP_ID, icmp_id)
 
             ct.nlmsg_build(nlh)
             nl.send_nlmsg(nlh)

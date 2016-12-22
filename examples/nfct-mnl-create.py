@@ -18,6 +18,11 @@ log = logging.getLogger(__name__)
 
 
 def main():
+    if len(sys.argv) != 2:
+        print("Usage: %s [id]" % sys.argv[0])
+        sys.exit(-1)
+    icmp_id = socket.htons(int(sys.argv[1]))
+
     nl = mnl.Socket(netlink.NETLINK_NETFILTER)
     nl.bind(0, mnl.MNL_SOCKET_AUTOPID)
     portid = nl.get_portid()
@@ -35,16 +40,15 @@ def main():
 
     ct = nfct.Conntrack()
     ct.set_attr_u8(nfct.ATTR_L3PROTO, socket.AF_INET)
-    ct.set_attr_u32(nfct.ATTR_IPV4_SRC, int(ipaddr.IPv4Address("1.1.1.1")))
-    ct.set_attr_u32(nfct.ATTR_IPV4_DST, int(ipaddr.IPv4Address("2.2.2.2")))
+    ct.set_attr_u32(nfct.ATTR_IPV4_SRC, socket.htonl(int(ipaddr.IPv4Address("127.0.0.1"))))
+    ct.set_attr_u32(nfct.ATTR_IPV4_DST, socket.htonl(int(ipaddr.IPv4Address("127.0.0.1"))))
 
-    ct.set_attr_u8(nfct.ATTR_L4PROTO, socket.IPPROTO_TCP)
-    ct.set_attr_u16(nfct.ATTR_PORT_SRC, socket.htons(20))
-    ct.set_attr_u16(nfct.ATTR_PORT_DST, socket.htons(10))
+    ct.set_attr_u8(nfct.ATTR_L4PROTO, socket.IPPROTO_ICMP)
+    ct.set_attr_u8(nfct.ATTR_ICMP_TYPE, 8)
+    ct.set_attr_u8(nfct.ATTR_ICMP_CODE, 0)
+    ct.set_attr_u16(nfct.ATTR_ICMP_ID, icmp_id)
 
     ct.setobjopt(nfct.NFCT_SOPT_SETUP_REPLY)
-
-    ct.set_attr_u8(nfct.ATTR_TCP_STATE, nfct_tcp.TCP_CONNTRACK_SYN_SENT)
     ct.set_attr_u32(nfct.ATTR_TIMEOUT, 100)
 
     ct.nlmsg_build(nlh)
